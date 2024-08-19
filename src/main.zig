@@ -39,25 +39,34 @@ pub fn main() !void {
     try stdout.print("Compression ratio: {d:.2}X\n", .{compression_ratio});
 }
 
-pub fn getTokensFromString(text: []const u8) !std.ArrayList(u16) {
-    var integers = std.ArrayList(u16).init(std.heap.page_allocator);
-    for (text) |char| {
-        try integers.append(@as(u16, char));
+pub fn getTokensFromString(text: []const u8) !std.ArrayList(u21) {
+    var integers = std.ArrayList(u21).init(std.heap.page_allocator);
+    errdefer integers.deinit();
+
+    var utf8 = try std.unicode.Utf8View.init(text);
+    var iter = utf8.iterator();
+
+    while (iter.nextCodepoint()) |codepoint| {
+        try integers.append(codepoint);
     }
+
     return integers;
 }
 
-pub fn getStringFromTokens(tokens: []const u16) !std.ArrayList(u8) {
+pub fn getStringFromTokens(tokens: []const u21) !std.ArrayList(u8) {
     var string = std.ArrayList(u8).init(std.heap.page_allocator);
     errdefer string.deinit();
 
-    for (tokens) |token| {
-        try string.append(@truncate(token));
+    for (tokens) |codepoint| {
+        var utf8_buf: [4]u8 = undefined;
+        const len = try std.unicode.utf8Encode(codepoint, &utf8_buf);
+        try string.appendSlice(utf8_buf[0..len]);
     }
+
     return string;
 }
 
-pub fn getStringFromTokensAndMerges(tokens: std.ArrayList(u16), merges: std.ArrayList(constants.Merge)) !std.ArrayList(u8) {
+pub fn getStringFromTokensAndMerges(tokens: std.ArrayList(u21), merges: std.ArrayList(constants.Merge)) !std.ArrayList(u8) {
     var current_tokens = try tokens.clone();
     defer current_tokens.deinit();
 
@@ -67,7 +76,7 @@ pub fn getStringFromTokensAndMerges(tokens: std.ArrayList(u16), merges: std.Arra
         i -= 1;
         const merge = merges.items[i];
         
-        var new_tokens = std.ArrayList(u16).init(std.heap.page_allocator);
+        var new_tokens = std.ArrayList(u21).init(std.heap.page_allocator);
         errdefer new_tokens.deinit();
         
         for (current_tokens.items) |token| {
@@ -84,11 +93,11 @@ pub fn getStringFromTokensAndMerges(tokens: std.ArrayList(u16), merges: std.Arra
         current_tokens = new_tokens;
     }
 
-    // Convert the final tokens to a string
+    // Convert the final tokens to a string using the new getStringFromTokens
     return try getStringFromTokens(current_tokens.items);
 }
 
-fn getStats(ids: []const u16) !std.AutoHashMap(constants.CharPair, usize) {
+fn getStats(ids: []const u21) !std.AutoHashMap(constants.CharPair, usize) {
     var counts = std.AutoHashMap(constants.CharPair, usize).init(std.heap.page_allocator);
 
     for (0..ids.len - 1) |i| {
@@ -133,8 +142,8 @@ fn getTopPair(stats: std.AutoHashMap(constants.CharPair, usize)) !constants.Char
     return top_pair;
 }
 
-pub fn replaceTopPairWithIndex(tokens: []const u16, top_pair: constants.CharPair, index: u16) !std.ArrayList(u16) {
-    var new_tokens = std.ArrayList(u16).init(std.heap.page_allocator);
+pub fn replaceTopPairWithIndex(tokens: []const u21, top_pair: constants.CharPair, index: u21) !std.ArrayList(u21) {
+    var new_tokens = std.ArrayList(u21).init(std.heap.page_allocator);
     var i: usize = 0;
     while (i < tokens.len) : (i += 1) {
         if (isMatchingPairAtIndex(tokens, i, top_pair)) {
@@ -147,11 +156,11 @@ pub fn replaceTopPairWithIndex(tokens: []const u16, top_pair: constants.CharPair
     return new_tokens;
 }
 
-fn isMatchingPairAtIndex(tokens: []const u16, index: usize, pair: constants.CharPair) bool {
+fn isMatchingPairAtIndex(tokens: []const u21, index: usize, pair: constants.CharPair) bool {
     if (tokens.len - index < 2) return false;
     
     const tokenPair = constants.TokenPair{ .tokens = tokens, .index = index };
-    return std.mem.eql(u16, tokenPair.slice(), &pair.asSlice());
+    return std.mem.eql(u21, tokenPair.slice(), &pair.asSlice());
 }
 
 pub fn readFile(path: []const u8) ![]u8 {
@@ -165,8 +174,8 @@ pub fn readFile(path: []const u8) ![]u8 {
     return buffer;
 }
 
-pub fn expandVocabulary(initial_tokens: []const u16, target_vocab_size: u16) !struct { tokens: std.ArrayList(u16), merges: std.ArrayList(constants.Merge) } {
-    var current_tokens = try std.ArrayList(u16).initCapacity(std.heap.page_allocator, initial_tokens.len);
+pub fn expandVocabulary(initial_tokens: []const u21, target_vocab_size: u16) !struct { tokens: std.ArrayList(u21), merges: std.ArrayList(constants.Merge) } {
+    var current_tokens = try std.ArrayList(u21).initCapacity(std.heap.page_allocator, initial_tokens.len);
     try current_tokens.appendSlice(initial_tokens);
 
     var merges = std.ArrayList(constants.Merge).init(std.heap.page_allocator);
