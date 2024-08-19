@@ -1,49 +1,38 @@
-# Zig Text Compression Tool
+# BPE Compression in Zig
 
-## Purpose
+This project implements Byte Pair Encoding (BPE) compression in Zig. It includes functionality to compress tokens using BPE and expand the vocabulary.
 
-This Zig program implements a simple text compression algorithm. It reads an input file, identifies the most frequent character pair, and replaces all occurrences of that pair with a single index. This process can be used as a basic step in text compression techniques.
+## Features
 
-## Build Instructions
+- Read input from a file
+- Convert text to tokens
+- Compute statistics on token pairs
+- Replace top pairs with new indices
+- Expand vocabulary using BPE algorithm
 
-1. Ensure you have Zig installed on your system. If not, download it from [ziglang.org](https://ziglang.org/).
+## File Structure
 
-2. Clone this repository:
+- `src/main.zig`: Main implementation of BPE compression and expansion
+- `src/constants.zig`: Constants used throughout the project
+- `src/compression.test.zig`: Test cases for compression and expansion functions
 
-   ```
-   git clone [your-repository-url]
-   cd [your-repository-name]
-   ```
+## Running the Project
 
-3. Build the project:
-   ```
-   zig build
-   ```
+To run the main program:
 
-## Running the Program
-
-1. Make sure you have an input file ready. The default path is set in `constants.zig`.
-
-2. Run the compiled program:
-
-   ```
-   ./zig-out/bin/[your-program-name]
-   ```
-
-3. The program will output:
-   - The most frequent character pair
-   - The length of the original token list
-   - The length of the new token list after compression
+```
+zig run src/main.zig
+```
 
 ## Testing
 
 To run the tests for this project:
 
 ```
-zig test src/test_compression.zig
+zig test src/compression.test.zig
 ```
 
-This will execute the test cases defined in `test_compression.zig`, which verify the functionality of the compression algorithm.
+This will execute the test cases defined in `compression.test.zig`, which verify the functionality of the compression and expansion algorithms.
 
 ## Configuration
 
@@ -51,7 +40,7 @@ You can modify the `INPUT_FILE_PATH` and `DEFAULT_INDEX` in `constants.zig` to c
 
 ## Recent Changes
 
-- Added unit tests to verify the compression algorithm's functionality.
+- Added unit tests to verify the compression and expansion algorithms' functionality.
 - Made key functions public to allow testing from external modules.
 
 ## License

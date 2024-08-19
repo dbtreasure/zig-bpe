@@ -16,18 +16,20 @@ pub fn main() !void {
     defer sorted_stats.deinit();
 
     const top_pair = try getTopPair(stats);
-    try stdout.print("Top pair: ({}, {})\n", .{ top_pair.first, top_pair.second });
-    
-    try stdout.print("\n", .{});
 
     const new_tokens = try replaceTopPairWithIndex(tokens.items, top_pair, constants.DEFAULT_INDEX);
     defer new_tokens.deinit();
 
+    const new_vocab_size: u16 = 276;
+    const expanded_tokens = try expandVocabulary(tokens.items, new_vocab_size);
+    defer expanded_tokens.deinit();
+
     try stdout.print("Length of original tokens: {}\n", .{tokens.items.len});
-    try stdout.print("Length of new tokens: {}\n", .{new_tokens.items.len});
+    try stdout.print("Length of expanded tokens: {}\n", .{expanded_tokens.items.len});
+    try stdout.print("New vocabulary size: {}\n", .{new_vocab_size});
 }
 
-fn getTokensFromString(text: []const u8) !std.ArrayList(u16) {
+pub fn getTokensFromString(text: []const u8) !std.ArrayList(u16) {
     var integers = std.ArrayList(u16).init(std.heap.page_allocator);
     for (text) |char| {
         try integers.append(@as(u16, char));
@@ -101,7 +103,7 @@ fn isMatchingPairAtIndex(tokens: []const u16, index: usize, pair: constants.Char
     return std.mem.eql(u16, tokenPair.slice(), &pair.asSlice());
 }
 
-fn readFile(path: []const u8) ![]u8 {
+pub fn readFile(path: []const u8) ![]u8 {
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
@@ -110,4 +112,24 @@ fn readFile(path: []const u8) ![]u8 {
     _ = try file.readAll(buffer);
 
     return buffer;
+}
+
+pub fn expandVocabulary(initial_tokens: []const u16, target_vocab_size: u16) !std.ArrayList(u16) {
+    var current_tokens = try std.ArrayList(u16).initCapacity(std.heap.page_allocator, initial_tokens.len);
+    try current_tokens.appendSlice(initial_tokens);
+
+    var current_index: u16 = constants.DEFAULT_INDEX;
+
+    while (current_index < target_vocab_size) : (current_index += 1) {
+        var stats = try getStats(current_tokens.items);
+        defer stats.deinit();
+
+        const top_pair = try getTopPair(stats);
+        
+        const new_tokens = try replaceTopPairWithIndex(current_tokens.items, top_pair, current_index);
+        current_tokens.deinit();
+        current_tokens = new_tokens;
+    }
+
+    return current_tokens;
 }

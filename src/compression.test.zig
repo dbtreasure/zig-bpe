@@ -32,3 +32,34 @@ test "replaceTopPairWithIndex" {
     // Print the result (optional, for visual confirmation)
     std.debug.print("Result: {any}\n", .{new_tokens.items});
 }
+
+test "expandVocabulary" {
+    // Initialize the allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Read the input file
+    const text = try main.readFile(constants.INPUT_FILE_PATH);
+    defer allocator.free(text);
+
+    // Get initial tokens
+    const initial_tokens = try main.getTokensFromString(text);
+    defer initial_tokens.deinit();
+
+    // Define the target vocabulary size
+    const new_vocab_size: u16 = 276;
+
+    // Expand the vocabulary
+    const expanded_tokens = try main.expandVocabulary(initial_tokens.items, new_vocab_size);
+    defer expanded_tokens.deinit();
+
+    // Check if the lengths match the expected values
+    try expect(initial_tokens.items.len == 23179);
+    try expect(expanded_tokens.items.len == 18378);
+
+    // print result
+    std.debug.print("Length of original tokens: {}\n", .{initial_tokens.items.len});
+    std.debug.print("Length of expanded tokens: {}\n", .{expanded_tokens.items.len});
+    std.debug.print("New vocabulary size: {}\n", .{new_vocab_size});
+}
