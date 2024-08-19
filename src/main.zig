@@ -24,9 +24,14 @@ pub fn main() !void {
     const expanded_tokens = try expandVocabulary(tokens.items, new_vocab_size);
     defer expanded_tokens.deinit();
 
-    try stdout.print("Length of original tokens: {}\n", .{tokens.items.len});
-    try stdout.print("Length of expanded tokens: {}\n", .{expanded_tokens.items.len});
+    const original_length = tokens.items.len;
+    const compressed_length = expanded_tokens.items.len;
+    const compression_ratio = @as(f32, @floatFromInt(original_length)) / @as(f32, @floatFromInt(compressed_length));
+
+    try stdout.print("Length of original tokens: {}\n", .{original_length});
+    try stdout.print("Length of expanded tokens: {}\n", .{compressed_length});
     try stdout.print("New vocabulary size: {}\n", .{new_vocab_size});
+    try stdout.print("Compression ratio: {d:.2}X\n", .{compression_ratio});
 }
 
 pub fn getTokensFromString(text: []const u8) !std.ArrayList(u16) {
@@ -118,6 +123,9 @@ pub fn expandVocabulary(initial_tokens: []const u16, target_vocab_size: u16) !st
     var current_tokens = try std.ArrayList(u16).initCapacity(std.heap.page_allocator, initial_tokens.len);
     try current_tokens.appendSlice(initial_tokens);
 
+    var merges = std.AutoHashMap(constants.CharPair, u16).init(std.heap.page_allocator);
+    defer merges.deinit();
+
     var current_index: u16 = constants.DEFAULT_INDEX;
 
     while (current_index < target_vocab_size) : (current_index += 1) {
@@ -126,7 +134,15 @@ pub fn expandVocabulary(initial_tokens: []const u16, target_vocab_size: u16) !st
 
         const top_pair = try getTopPair(stats);
         
+        try merges.put(top_pair, current_index);
+        
         const new_tokens = try replaceTopPairWithIndex(current_tokens.items, top_pair, current_index);
+        
+        // Print merge information
+        try std.io.getStdOut().writer().print("merging ({}, {}) into a new token {}\n", .{
+            top_pair.first, top_pair.second, current_index
+        });
+
         current_tokens.deinit();
         current_tokens = new_tokens;
     }
