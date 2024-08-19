@@ -35,9 +35,24 @@ This Zig program implements a simple text compression algorithm. It reads an inp
    - The length of the original token list
    - The length of the new token list after compression
 
+## Testing
+
+To run the tests for this project:
+
+```
+zig test src/test_compression.zig
+```
+
+This will execute the test cases defined in `test_compression.zig`, which verify the functionality of the compression algorithm.
+
 ## Configuration
 
 You can modify the `INPUT_FILE_PATH` and `DEFAULT_INDEX` in `constants.zig` to change the input file and the replacement index used in compression.
+
+## Recent Changes
+
+- Added unit tests to verify the compression algorithm's functionality.
+- Made key functions public to allow testing from external modules.
 
 ## License
 
