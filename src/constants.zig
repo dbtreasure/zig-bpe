@@ -23,3 +23,8 @@ pub const StatEntry = struct {
     key: CharPair,
     value: usize,
 };
+
+pub const Merge = struct {
+    pair: CharPair,
+    new_token: u16,
+};

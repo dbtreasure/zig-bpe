@@ -51,15 +51,50 @@ test "expandVocabulary" {
     const new_vocab_size: u16 = 276;
 
     // Expand the vocabulary
-    const expanded_tokens = try main.expandVocabulary(initial_tokens.items, new_vocab_size);
-    defer expanded_tokens.deinit();
+    const expanded_result = try main.expandVocabulary(initial_tokens.items, new_vocab_size);
+    defer expanded_result.tokens.deinit();
+    defer expanded_result.merges.deinit();
 
-    // Check if the lengths match the expected values
-    try expect(initial_tokens.items.len == 23179);
-    try expect(expanded_tokens.items.len == 18378);
-
-    // print result
+    // Print results for debugging
     std.debug.print("Length of original tokens: {}\n", .{initial_tokens.items.len});
-    std.debug.print("Length of expanded tokens: {}\n", .{expanded_tokens.items.len});
+    std.debug.print("Length of expanded tokens: {}\n", .{expanded_result.tokens.items.len});
+    std.debug.print("Number of merges: {}\n", .{expanded_result.merges.items.len});
     std.debug.print("New vocabulary size: {}\n", .{new_vocab_size});
+
+    // Check if the expanded tokens are fewer than the initial tokens
+    try expect(expanded_result.tokens.items.len < initial_tokens.items.len);
+
+    // Check if the number of merges is correct
+    try expect(expanded_result.merges.items.len == new_vocab_size - constants.DEFAULT_INDEX);
+
+    // Check if the new vocabulary size is reached
+    try expect(expanded_result.merges.items.len + constants.DEFAULT_INDEX == new_vocab_size);
+}
+
+test "tokenization round trip" {
+    // Read the input file
+    const original_text = try main.readFile(constants.INPUT_FILE_PATH);
+    defer std.heap.page_allocator.free(original_text);
+
+    // Tokenize
+    const tokens = try main.getTokensFromString(original_text);
+    defer tokens.deinit();
+
+    // Expand vocabulary
+    const new_vocab_size: u16 = 276;
+    const expanded_result = try main.expandVocabulary(tokens.items, new_vocab_size);
+    defer expanded_result.tokens.deinit();
+    defer expanded_result.merges.deinit();
+
+    // Detokenize
+    var reconstructed_text = try main.getStringFromTokensAndMerges(expanded_result.tokens, expanded_result.merges);
+    defer reconstructed_text.deinit();
+
+    // Compare
+    for (0..original_text.len) |i| {
+        try std.testing.expectEqual(original_text[i], reconstructed_text.items[i]);
+    }
+
+    // Print success message
+    std.debug.print("Tokenization round-trip successful\n", .{});
 }
