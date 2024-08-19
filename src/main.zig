@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const CharPair = struct {
-    first: u8,
-    second: u8,
+    first: u16,
+    second: u16,
 };
 
 const StatEntry = struct {
@@ -12,12 +12,14 @@ const StatEntry = struct {
 
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
-    const text =
-        \\Ｕｎｉｃｏｄｅ! 🅤🅝🅘🅒🅞🅓🅔‽ 🇺‌🇳‌🇮‌🇨‌🇴‌🇩‌🇪! 😄 The very name strikes fear and awe into the hearts of programmers worldwide. We all know we ought to "support Unicode" in our software (whatever that means—like using wchar_t for all the strings, right?). But Unicode can be abstruse, and diving into the thousand-page Unicode Standard plus its dozens of supplementary annexes, reports, and notes can be more than a little intimidating. I don't blame programmers for still finding the whole thing mysterious, even 30 years after Unicode's inception.
-    ;
-    const integers = try getIntegersFromString(text);
     
-    var stats = try getStats(integers.items);
+    // Read the text from the file
+    const text = try readFile("input.txt");
+    defer std.heap.page_allocator.free(text);
+    
+    const tokens = try getTokensFromString(text);
+    
+    var stats = try getStats(tokens.items);
     defer stats.deinit();
 
     const sorted_stats = try sortStats(stats);
@@ -25,17 +27,38 @@ pub fn main() !void {
 
     const top_pair = try getTopPair(stats);
     try stdout.print("Top pair: ({}, {})\n", .{ top_pair.first, top_pair.second });
+    
+    try stdout.print("\n", .{});
+
+    const new_tokens = try replaceTopPairWithIndex(tokens.items, top_pair, 256);
+
+    try stdout.print("Length of tokens: {}\n", .{tokens.items.len});
+    try stdout.print("New tokens: {}\n", .{new_tokens.items.len});
 }
 
-fn getIntegersFromString(text: []const u8) !std.ArrayList(u8) {
-    var integers = std.ArrayList(u8).init(std.heap.page_allocator);
+fn replaceTopPairWithIndex(tokens: []const u16, top_pair: CharPair, index: u16) !std.ArrayList(u16) {
+    var new_tokens = std.ArrayList(u16).init(std.heap.page_allocator);
+    var i: usize = 0;
+    while (i < tokens.len) : (i += 1) {
+        if (tokens.len - i >= 2 and std.mem.eql(u16, tokens[i..i+2], &[_]u16{ top_pair.first, top_pair.second })) {
+            try new_tokens.append(index);
+            i += 1; // Skip the next token as we've consumed the pair
+        } else {
+            try new_tokens.append(tokens[i]);
+        }
+    }
+    return new_tokens;
+}
+
+fn getTokensFromString(text: []const u8) !std.ArrayList(u16) {
+    var integers = std.ArrayList(u16).init(std.heap.page_allocator);
     for (text) |char| {
-        try integers.append(char);
+        try integers.append(@as(u16, char));
     }
     return integers;
 }
 
-fn getStats(ids: []const u8) !std.AutoHashMap(CharPair, usize) {
+fn getStats(ids: []const u16) !std.AutoHashMap(CharPair, usize) {
     var counts = std.AutoHashMap(CharPair, usize).init(std.heap.page_allocator);
 
     for (0..ids.len - 1) |i| {
@@ -78,4 +101,16 @@ fn getTopPair(stats: std.AutoHashMap(CharPair, usize)) !CharPair {
         }
     }
     return top_pair;
+}
+
+// New function to read the file
+fn readFile(path: []const u8) ![]u8 {
+    const file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+
+    const file_size = try file.getEndPos();
+    const buffer = try std.heap.page_allocator.alloc(u8, file_size);
+    _ = try file.readAll(buffer);
+
+    return buffer;
 }
