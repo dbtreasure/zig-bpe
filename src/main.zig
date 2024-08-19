@@ -21,30 +21,10 @@ pub fn main() !void {
     try stdout.print("\n", .{});
 
     const new_tokens = try replaceTopPairWithIndex(tokens.items, top_pair, constants.DEFAULT_INDEX);
+    defer new_tokens.deinit();
 
-    try stdout.print("Length of tokens: {}\n", .{tokens.items.len});
-    try stdout.print("New tokens: {}\n", .{new_tokens.items.len});
-}
-
-fn replaceTopPairWithIndex(tokens: []const u16, top_pair: constants.CharPair, index: u16) !std.ArrayList(u16) {
-    var new_tokens = std.ArrayList(u16).init(std.heap.page_allocator);
-    var i: usize = 0;
-    while (i < tokens.len) : (i += 1) {
-        if (isMatchingPairAtIndex(tokens, i, top_pair)) {
-            try new_tokens.append(index);
-            i += 1; // Skip the next token as we've consumed the pair
-        } else {
-            try new_tokens.append(tokens[i]);
-        }
-    }
-    return new_tokens;
-}
-
-fn isMatchingPairAtIndex(tokens: []const u16, index: usize, pair: constants.CharPair) bool {
-    if (tokens.len - index < 2) return false;
-    
-    const tokenPair = constants.TokenPair{ .tokens = tokens, .index = index };
-    return std.mem.eql(u16, tokenPair.slice(), &pair.asSlice());
+    try stdout.print("Length of original tokens: {}\n", .{tokens.items.len});
+    try stdout.print("Length of new tokens: {}\n", .{new_tokens.items.len});
 }
 
 fn getTokensFromString(text: []const u8) !std.ArrayList(u16) {
@@ -98,6 +78,27 @@ fn getTopPair(stats: std.AutoHashMap(constants.CharPair, usize)) !constants.Char
         }
     }
     return top_pair;
+}
+
+pub fn replaceTopPairWithIndex(tokens: []const u16, top_pair: constants.CharPair, index: u16) !std.ArrayList(u16) {
+    var new_tokens = std.ArrayList(u16).init(std.heap.page_allocator);
+    var i: usize = 0;
+    while (i < tokens.len) : (i += 1) {
+        if (isMatchingPairAtIndex(tokens, i, top_pair)) {
+            try new_tokens.append(index);
+            i += 1; // Skip the next token as we've consumed the pair
+        } else {
+            try new_tokens.append(tokens[i]);
+        }
+    }
+    return new_tokens;
+}
+
+fn isMatchingPairAtIndex(tokens: []const u16, index: usize, pair: constants.CharPair) bool {
+    if (tokens.len - index < 2) return false;
+    
+    const tokenPair = constants.TokenPair{ .tokens = tokens, .index = index };
+    return std.mem.eql(u16, tokenPair.slice(), &pair.asSlice());
 }
 
 fn readFile(path: []const u8) ![]u8 {
