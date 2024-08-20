@@ -275,3 +275,103 @@ test "encode and decode round trip" {
     // If we've made it this far, the test has passed
     std.debug.print("Encode and decode round-trip successful\n", .{});
 }
+
+test "encode and decode" {
+    // Initialize the allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Create a sample vocabulary
+    var vocab = main.Vocab.init(allocator);
+    defer main.freeVocab(&vocab);
+
+    // Add some entries to the vocabulary
+    try vocab.put(0, try allocator.dupe(u8, "H"));
+    try vocab.put(1, try allocator.dupe(u8, "e"));
+    try vocab.put(2, try allocator.dupe(u8, "l"));
+    try vocab.put(3, try allocator.dupe(u8, "o"));
+    try vocab.put(4, try allocator.dupe(u8, " "));
+    try vocab.put(5, try allocator.dupe(u8, "w"));
+    try vocab.put(6, try allocator.dupe(u8, "r"));
+    try vocab.put(7, try allocator.dupe(u8, "d"));
+    try vocab.put(8, try allocator.dupe(u8, "!"));
+    try vocab.put(256, try allocator.dupe(u8, "He"));
+    try vocab.put(257, try allocator.dupe(u8, "ll"));
+    try vocab.put(258, try allocator.dupe(u8, "o "));
+    try vocab.put(259, try allocator.dupe(u8, "wor"));
+    try vocab.put(260, try allocator.dupe(u8, "ld"));
+
+    // Create a sample text
+    const original_text = "Hello world!";
+
+    // Define the expected encoded result
+    const expected_encoded = [_]u21{ 256, 257, 258, 259, 260, 8 };
+
+    // Encode the text
+    const encoded = try main.encode(original_text, vocab, allocator);
+    defer allocator.free(encoded);
+
+    // Print debug information
+    std.debug.print("Original text: '{s}'\n", .{original_text});
+    std.debug.print("Encoded result: {any}\n", .{encoded});
+    std.debug.print("Expected encoded: {any}\n", .{expected_encoded});
+
+    // Check the encoded result
+    try std.testing.expectEqualSlices(u21, &expected_encoded, encoded);
+
+    // Decode the encoded result
+    const decoded = try main.decode(encoded, vocab, allocator);
+    defer allocator.free(decoded);
+
+    // Check if the decoded text matches the original
+    try std.testing.expectEqualStrings(original_text, decoded);
+
+    std.debug.print("encode and decode test passed successfully\n", .{});
+}
+
+test "simple encode and decode round trip" {
+    // Initialize the allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Read the simple input file
+    const original_text = try main.readFile(SIMPLE_INPUT_FILE_PATH);
+    defer std.heap.page_allocator.free(original_text);
+
+    // Tokenize
+    const tokens = try main.getTokensFromString(original_text);
+    defer tokens.deinit();
+
+    // Expand vocabulary (using a smaller size for this simple test)
+    const new_vocab_size: u16 = 300;
+    const expanded_result = try main.expandVocabulary(tokens.items, new_vocab_size);
+    defer expanded_result.tokens.deinit();
+    defer expanded_result.merges.deinit();
+
+    // Create vocabulary
+    var vocab = try main.createVocab(expanded_result.merges.items, allocator);
+    defer main.freeVocab(&vocab);
+
+    // Encode the original text
+    const encoded = try main.encode(original_text, vocab, allocator);
+    defer allocator.free(encoded);
+
+    // Decode the encoded result
+    const decoded = try main.decode(encoded, vocab, allocator);
+    defer allocator.free(decoded);
+
+    // Print debug information
+    std.debug.print("Original text: '{s}'\n", .{original_text});
+    std.debug.print("Encoded tokens: {any}\n", .{encoded});
+    std.debug.print("Decoded text: '{s}'\n", .{decoded});
+    std.debug.print("Vocabulary size: {}\n", .{vocab.count()});
+    std.debug.print("Number of tokens: {}\n", .{encoded.len});
+    std.debug.print("Compression ratio: {d:.2}\n", .{@as(f32, @floatFromInt(original_text.len)) / @as(f32, @floatFromInt(encoded.len))});
+
+    // Check if the decoded text matches the original
+    try std.testing.expectEqualStrings(original_text, decoded);
+
+    std.debug.print("Simple encode and decode round-trip successful\n", .{});
+}

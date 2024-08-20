@@ -50,6 +50,10 @@ pub fn main() !void {
     try stdout.print("Original text: {s}\n", .{text});
     try stdout.print("Decoded text: {s}\n", .{decoded});
     try stdout.print("Decoded text matches original: {}\n", .{std.mem.eql(u8, text, decoded)});
+
+    const encoded = try encode(text, vocab, allocator);
+    defer allocator.free(encoded);
+    try stdout.print("Encoded tokens: {any}\n", .{encoded});
 }
 
 pub fn getTokensFromString(text: []const u8) !std.ArrayList(u21) {
@@ -254,4 +258,52 @@ pub fn decode(tokens: []const u21, vocab: Vocab, allocator: std.mem.Allocator) !
     }
 
     return result.toOwnedSlice();
+}
+
+pub fn encode(text: []const u8, vocab: Vocab, allocator: std.mem.Allocator) ![]u21 {
+    var encoded = std.ArrayList(u21).init(allocator);
+    errdefer encoded.deinit();
+
+    var i: usize = 0;
+    while (i < text.len) {
+        var best_match: ?struct { token: u21, length: usize } = null;
+
+        // Try to find the longest matching sequence
+        var it = vocab.iterator();
+        while (it.next()) |entry| {
+            const token_bytes = entry.value_ptr.*;
+            if (text.len - i >= token_bytes.len and std.mem.eql(u8, token_bytes, text[i .. i + token_bytes.len])) {
+                if (best_match == null or token_bytes.len > best_match.?.length) {
+                    best_match = .{ .token = entry.key_ptr.*, .length = token_bytes.len };
+                }
+            }
+        }
+
+        if (best_match) |match| {
+            try encoded.append(match.token);
+            i += match.length;
+        } else {
+            // If no match found, encode as a single byte
+            try encoded.append(text[i]);
+            i += 1;
+        }
+    }
+
+    return encoded.toOwnedSlice();
+}
+
+fn findLongestMatch(text: []const u8, vocab: Vocab) !struct { token: ?u21, length: usize } {
+    const max_len = if (text.len > 32) 32 else text.len;
+
+    for (1..max_len + 1) |len| {
+        const slice = text[0..len];
+        var it = vocab.iterator();
+        while (it.next()) |entry| {
+            if (std.mem.eql(u8, entry.value_ptr.*, slice)) {
+                return .{ .token = entry.key_ptr.*, .length = len };
+            }
+        }
+    }
+
+    return .{ .token = null, .length = 0 };
 }
