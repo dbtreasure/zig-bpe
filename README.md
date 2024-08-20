@@ -10,11 +10,12 @@ This project implements Byte Pair Encoding (BPE) compression in Zig. It includes
 - Replace top pairs with new indices
 - Expand vocabulary using BPE algorithm
 - Create vocabulary from merges
+- Encode text using the created vocabulary
 - Decode compressed tokens back to original text
 
 ## File Structure
 
-- `src/main.zig`: Main implementation of BPE compression, expansion, and decoding
+- `src/main.zig`: Main implementation of BPE compression, expansion, encoding, and decoding
 - `src/constants.zig`: Constants used throughout the project
 - `src/compression.test.zig`: Comprehensive test cases for all major functions
 
@@ -34,7 +35,7 @@ To run the tests for this project:
 zig test src/compression.test.zig
 ```
 
-This will execute the test cases defined in `compression.test.zig`, which verify the functionality of the compression, expansion, and decoding algorithms.
+This will execute the test cases defined in `compression.test.zig`, which verify the functionality of the compression, expansion, encoding, and decoding algorithms.
 
 ## Configuration
 
@@ -50,9 +51,11 @@ The current implementation and tests are designed to work with simplified UTF-8.
 
 ## Recent Changes
 
-- Added unit tests to verify the compression, expansion, and decoding algorithms' functionality.
+- Added unit tests to verify the compression, expansion, encoding, and decoding algorithms' functionality.
 - Made key functions public to allow testing from external modules.
 - Updated the implementation to handle simplified UTF-8 encoding and decoding.
+- Extracted the logic for finding the longest matching sequence into a separate function.
+- Added a new test case to test the encoding and decoding process using the `simple_input.txt` file.
 
 ## License
 
