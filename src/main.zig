@@ -1,15 +1,19 @@
 const std = @import("std");
 const constants = @import("constants.zig");
 
+pub const Vocab = std.AutoHashMap(u21, []const u8);
+
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
-    
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
     const text = try readFile(constants.INPUT_FILE_PATH);
     defer std.heap.page_allocator.free(text);
-    
+
     const tokens = try getTokensFromString(text);
     defer tokens.deinit();
-    
     var stats = try getStats(tokens.items);
     defer stats.deinit();
 
@@ -28,7 +32,6 @@ pub fn main() !void {
 
     var expanded_string = try getStringFromTokensAndMerges(expanded_result.tokens, expanded_result.merges);
     defer expanded_string.deinit();
-
     const original_length = tokens.items.len;
     const compressed_length = expanded_result.tokens.items.len;
     const compression_ratio = @as(f32, @floatFromInt(original_length)) / @as(f32, @floatFromInt(compressed_length));
@@ -37,6 +40,16 @@ pub fn main() !void {
     try stdout.print("Length of expanded tokens: {}\n", .{compressed_length});
     try stdout.print("New vocabulary size: {}\n", .{new_vocab_size});
     try stdout.print("Compression ratio: {d:.2}X\n", .{compression_ratio});
+
+    var vocab = try createVocab(expanded_result.merges.items, allocator);
+    defer freeVocab(&vocab);
+
+    const decoded = try decode(expanded_result.tokens.items, vocab, allocator);
+    defer allocator.free(decoded);
+
+    try stdout.print("Original text: {s}\n", .{text});
+    try stdout.print("Decoded text: {s}\n", .{decoded});
+    try stdout.print("Decoded text matches original: {}\n", .{std.mem.eql(u8, text, decoded)});
 }
 
 pub fn getTokensFromString(text: []const u8) !std.ArrayList(u21) {
@@ -75,10 +88,10 @@ pub fn getStringFromTokensAndMerges(tokens: std.ArrayList(u21), merges: std.Arra
     while (i > 0) {
         i -= 1;
         const merge = merges.items[i];
-        
+
         var new_tokens = std.ArrayList(u21).init(std.heap.page_allocator);
         errdefer new_tokens.deinit();
-        
+
         for (current_tokens.items) |token| {
             if (token == merge.new_token) {
                 try new_tokens.append(merge.pair.first);
@@ -158,7 +171,7 @@ pub fn replaceTopPairWithIndex(tokens: []const u21, top_pair: constants.CharPair
 
 fn isMatchingPairAtIndex(tokens: []const u21, index: usize, pair: constants.CharPair) bool {
     if (tokens.len - index < 2) return false;
-    
+
     const tokenPair = constants.TokenPair{ .tokens = tokens, .index = index };
     return std.mem.eql(u21, tokenPair.slice(), &pair.asSlice());
 }
@@ -187,9 +200,9 @@ pub fn expandVocabulary(initial_tokens: []const u21, target_vocab_size: u16) !st
         defer stats.deinit();
 
         const top_pair = try getTopPair(stats);
-        
+
         try merges.append(.{ .pair = top_pair, .new_token = current_index });
-        
+
         const new_tokens = try replaceTopPairWithIndex(current_tokens.items, top_pair, current_index);
 
         current_tokens.deinit();
@@ -197,4 +210,48 @@ pub fn expandVocabulary(initial_tokens: []const u21, target_vocab_size: u16) !st
     }
 
     return .{ .tokens = current_tokens, .merges = merges };
+}
+
+pub fn createVocab(merges: []const constants.Merge, allocator: std.mem.Allocator) !Vocab {
+    var vocab = Vocab.init(allocator);
+
+    // Initialize with byte values
+    for (0..256) |i| {
+        const byte_slice = try allocator.dupe(u8, &[_]u8{@intCast(i)});
+        try vocab.put(@intCast(i), byte_slice);
+    }
+
+    // Add merged pairs
+    for (merges) |merge| {
+        const p0 = vocab.get(merge.pair.first) orelse return error.InvalidMerge;
+        const p1 = vocab.get(merge.pair.second) orelse return error.InvalidMerge;
+
+        var combined = try allocator.alloc(u8, p0.len + p1.len);
+        @memcpy(combined[0..p0.len], p0);
+        @memcpy(combined[p0.len..], p1);
+
+        try vocab.put(merge.new_token, combined);
+    }
+
+    return vocab;
+}
+
+pub fn freeVocab(vocab: *Vocab) void {
+    var it = vocab.iterator();
+    while (it.next()) |entry| {
+        vocab.allocator.free(entry.value_ptr.*);
+    }
+    vocab.deinit();
+}
+
+pub fn decode(tokens: []const u21, vocab: Vocab, allocator: std.mem.Allocator) ![]u8 {
+    var result = std.ArrayList(u8).init(allocator);
+    errdefer result.deinit();
+
+    for (tokens) |token| {
+        const bytes = vocab.get(token) orelse return error.InvalidToken;
+        try result.appendSlice(bytes);
+    }
+
+    return result.toOwnedSlice();
 }

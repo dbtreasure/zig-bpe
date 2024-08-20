@@ -1,5 +1,5 @@
 pub const DEFAULT_INDEX: u21 = 256;
-pub const INPUT_FILE_PATH = "input.txt";
+pub const INPUT_FILE_PATH = "simple_input.txt";
 
 pub const CharPair = struct {
     first: u21,

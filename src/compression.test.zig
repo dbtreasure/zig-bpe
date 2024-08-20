@@ -111,7 +111,7 @@ test "tokenization round trip" {
 
             std.debug.print("Context: original: '{s}'\n", .{original_text[orig_start..orig_end]});
             std.debug.print("Context: reconstructed: '{s}'\n", .{reconstructed_text.items[recon_start..recon_end]});
-            
+
             // Print token information
             const start_token = if (i >= 5) i - 5 else 0;
             const end_token = @min(i + 6, expanded_result.tokens.items.len);
@@ -120,14 +120,14 @@ test "tokenization round trip" {
             } else {
                 std.debug.print("Unable to print tokens around mismatch: index out of bounds\n", .{});
             }
-            
+
             return error.TokenizationMismatch;
         }
     }
 
     // Check if lengths are different
     if (original_text.len != reconstructed_text.items.len) {
-        std.debug.print("Length mismatch: original {} vs reconstructed {}\n", .{original_text.len, reconstructed_text.items.len});
+        std.debug.print("Length mismatch: original {} vs reconstructed {}\n", .{ original_text.len, reconstructed_text.items.len });
         return error.TokenizationLengthMismatch;
     }
 
@@ -163,4 +163,115 @@ test "simple tokenization round trip" {
 
     // If we've made it this far, the test has passed
     std.debug.print("Simple tokenization round-trip successful\n", .{});
+}
+
+test "createVocab" {
+    // Initialize the allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Create some sample merges
+    var merges = std.ArrayList(constants.Merge).init(allocator);
+    defer merges.deinit();
+    try merges.append(.{ .pair = .{ .first = 'H', .second = 'e' }, .new_token = 256 });
+    try merges.append(.{ .pair = .{ .first = 'l', .second = 'l' }, .new_token = 257 });
+    try merges.append(.{ .pair = .{ .first = 256, .second = 'l' }, .new_token = 258 });
+
+    // Create the vocabulary
+    var vocab = try main.createVocab(merges.items, allocator);
+    defer main.freeVocab(&vocab);
+
+    // Check the size of the vocabulary
+    try std.testing.expectEqual(@as(usize, 259), vocab.count());
+
+    // Check some specific entries
+    try std.testing.expectEqualStrings("H", vocab.get('H').?);
+    try std.testing.expectEqualStrings("e", vocab.get('e').?);
+    try std.testing.expectEqualStrings("l", vocab.get('l').?);
+    try std.testing.expectEqualStrings("He", vocab.get(256).?);
+    try std.testing.expectEqualStrings("ll", vocab.get(257).?);
+    try std.testing.expectEqualStrings("Hel", vocab.get(258).?);
+
+    // Check a non-existent entry
+    try std.testing.expect(vocab.get(259) == null);
+
+    std.debug.print("createVocab test passed successfully\n", .{});
+}
+
+test "decode" {
+    // Initialize the allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Create a sample vocabulary
+    var vocab = main.Vocab.init(allocator);
+    defer main.freeVocab(&vocab);
+
+    // Add some entries to the vocabulary
+    try vocab.put(0, try allocator.dupe(u8, "H"));
+    try vocab.put(1, try allocator.dupe(u8, "e"));
+    try vocab.put(2, try allocator.dupe(u8, "l"));
+    try vocab.put(3, try allocator.dupe(u8, "o"));
+    try vocab.put(256, try allocator.dupe(u8, "He"));
+    try vocab.put(257, try allocator.dupe(u8, "ll"));
+    try vocab.put(258, try allocator.dupe(u8, "o!"));
+
+    // Create a sample token sequence
+    const tokens = [_]u21{ 256, 257, 258 };
+
+    // Decode the tokens
+    const decoded = try main.decode(&tokens, vocab, allocator);
+    defer allocator.free(decoded);
+
+    // Check the decoded result
+    try std.testing.expectEqualStrings("Hello!", decoded);
+
+    // Test with an invalid token
+    const invalid_tokens = [_]u21{ 256, 999, 258 };
+    try std.testing.expectError(error.InvalidToken, main.decode(&invalid_tokens, vocab, allocator));
+
+    std.debug.print("decode test passed successfully\n", .{});
+}
+
+test "encode and decode round trip" {
+    // Initialize the allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Read the input file
+    const original_text = try main.readFile(constants.INPUT_FILE_PATH);
+    defer std.heap.page_allocator.free(original_text);
+
+    // Tokenize
+    const tokens = try main.getTokensFromString(original_text);
+    defer tokens.deinit();
+
+    // Expand vocabulary
+    const new_vocab_size: u16 = 276;
+    const expanded_result = try main.expandVocabulary(tokens.items, new_vocab_size);
+    defer expanded_result.tokens.deinit();
+    defer expanded_result.merges.deinit();
+
+    // Create vocabulary
+    var vocab = try main.createVocab(expanded_result.merges.items, allocator);
+    defer main.freeVocab(&vocab);
+
+    // Decode the expanded tokens
+    const decoded = try main.decode(expanded_result.tokens.items, vocab, allocator);
+    defer allocator.free(decoded);
+
+    // Compare original and decoded text
+    try std.testing.expectEqualStrings(original_text, decoded);
+
+    // Print debug information
+    std.debug.print("Original text length: {}\n", .{original_text.len});
+    std.debug.print("Decoded text length: {}\n", .{decoded.len});
+    std.debug.print("Vocabulary size: {}\n", .{vocab.count()});
+    std.debug.print("Number of tokens: {}\n", .{expanded_result.tokens.items.len});
+
+    // If we've made it this far, the test has passed
+    std.debug.print("Encode and decode round-trip successful\n", .{});
 }
