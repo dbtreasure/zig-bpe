@@ -2,12 +2,24 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "C/C++ Runner: Debug Session",
-      "type": "lldb",
+      "name": "(lldb) Launch",
+      "type": "cppdbg",
       "request": "launch",
+      "program": "${workspaceFolder}/zig-out/bin/bpe-zig",
       "args": [],
-      "cwd": "/Users/dan/Development/bpe-zig",
-      "program": "/Users/dan/Development/bpe-zig/build/Debug/outDebug"
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb",
+      "preLaunchTask": "build",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for lldb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
     }
   ]
 }
