@@ -53,8 +53,8 @@ pub fn main() !void {
     var basic_tokenizer = BasicTokenizer.init(allocator);
     defer basic_tokenizer.deinit();
 
-    const text = try readFile("input.txt");
-    try basic_tokenizer.train(text, allocator, 500);
+    const text = try readFile("taylorswift.txt");
+    try basic_tokenizer.train(text, allocator, 1000);
 
     const test_text = "The official name for the encoding is UTF-8, the spelling used in all Unicode Consortium documents. Most standards officially list it in upper case as well, but all that do are also case-insensitive and utf-8 is often used in code.[citation needed]Some other spellings may also be accepted by standards, e.g. web standards (which include CSS, HTML, XML, and HTTP headers) explicitly allow utf8 (and disallow unicode) and many aliases for encodings.[10] Spellings with a space e.g. UTF 8 should not be used. The official Internet Assigned Numbers Authority also lists csUTF8 as the only alias,[11] which is rarely used.In Windows, UTF-8 is codepage 65001[12] (i.e. CP_UTF8 in source code).In MySQL, UTF-8 is called utf8mb4[13] (with utf8mb3, and its alias utf8, being a subset encoding for characters in the Basic Multilingual Plane[14]).In HP PCL, the Symbol-ID for UTF-8 is 18N.[15]In Oracle Database (since version 9.0), AL32UTF8[16] means UTF-8. See also CESU-8 for an almost synonym with UTF-8 that rarely should be used.UTF-8-BOM and UTF-8-NOBOM are sometimes used for text files which contain or do not contain a byte-order mark (BOM), respectively.[citation needed] In Japan especially, UTF-8 encoding without a BOM is sometimes called UTF-8N.[17][18]";
     const test_text_tokens = try BasicTokenizer.generateInitialTokens(test_text, allocator);
@@ -144,6 +144,18 @@ pub const BasicTokenizer = struct {
         return result.toOwnedSlice();
     }
 
+    pub fn generateInitialTokens(text: []const u8, allocator: std.mem.Allocator) !std.ArrayList(u16) {
+        var tokens = std.ArrayList(u16).init(allocator);
+        var utf8 = try std.unicode.Utf8View.init(text);
+        var iter = utf8.iterator();
+
+        while (iter.nextCodepointSlice()) |byte_slice| {
+            try tokens.append(byte_slice[0]);
+        }
+
+        return tokens;
+    }
+
     fn createVocab(merges: *const std.ArrayList(Merge), allocator: std.mem.Allocator) !Vocab {
         var vocab = Vocab.init(allocator);
 
@@ -166,18 +178,6 @@ pub const BasicTokenizer = struct {
         }
 
         return vocab;
-    }
-
-    pub fn generateInitialTokens(text: []const u8, allocator: std.mem.Allocator) !std.ArrayList(u16) {
-        var tokens = std.ArrayList(u16).init(allocator);
-        var utf8 = try std.unicode.Utf8View.init(text);
-        var iter = utf8.iterator();
-
-        while (iter.nextCodepointSlice()) |byte_slice| {
-            try tokens.append(byte_slice[0]);
-        }
-
-        return tokens;
     }
 
     fn countCharPairFrequencies(utf8_bytes: []const u16, allocator: std.mem.Allocator) !CharPairFrequencies {
