@@ -1,5 +1,10 @@
 const std = @import("std");
 
+const ArenaAllocator = std.heap.ArenaAllocator;
+fn initArena(backing_allocator: std.mem.Allocator) !ArenaAllocator {
+    return ArenaAllocator.init(backing_allocator);
+}
+
 pub const Vocab = std.AutoHashMap(u16, []const u8);
 
 pub const CharPair = struct {
@@ -47,28 +52,27 @@ pub const TrainResult = struct {
 };
 
 pub fn main() !void {
-    // allocator
-    const allocator = std.heap.page_allocator;
+    const backing_allocator = std.heap.page_allocator;
+    var arena = try initArena(backing_allocator);
+    defer arena.deinit();
 
-    var basic_tokenizer = BasicTokenizer.init(allocator);
+    var basic_tokenizer = try BasicTokenizer.init(backing_allocator);
     defer basic_tokenizer.deinit();
 
-    const text = try readFile(allocator, "taylorswift.txt");
-    defer allocator.free(text);
-    try basic_tokenizer.train(text, allocator, 1000);
+    const text = try readFile(&arena, "taylorswift.txt");
+    // No need to free text, as it will be freed when arena is deinitialized
+    try basic_tokenizer.train(text, 1000);
 
     const test_text = "The official name for the encoding is UTF-8, the spelling used in all Unicode Consortium documents. Most standards officially list it in upper case as well, but all that do are also case-insensitive and utf-8 is often used in code.[citation needed]Some other spellings may also be accepted by standards, e.g. web standards (which include CSS, HTML, XML, and HTTP headers) explicitly allow utf8 (and disallow unicode) and many aliases for encodings.[10] Spellings with a space e.g. UTF 8 should not be used. The official Internet Assigned Numbers Authority also lists csUTF8 as the only alias,[11] which is rarely used.In Windows, UTF-8 is codepage 65001[12] (i.e. CP_UTF8 in source code).In MySQL, UTF-8 is called utf8mb4[13] (with utf8mb3, and its alias utf8, being a subset encoding for characters in the Basic Multilingual Plane[14]).In HP PCL, the Symbol-ID for UTF-8 is 18N.[15]In Oracle Database (since version 9.0), AL32UTF8[16] means UTF-8. See also CESU-8 for an almost synonym with UTF-8 that rarely should be used.UTF-8-BOM and UTF-8-NOBOM are sometimes used for text files which contain or do not contain a byte-order mark (BOM), respectively.[citation needed] In Japan especially, UTF-8 encoding without a BOM is sometimes called UTF-8N.[17][18]";
-    const test_text_tokens = try BasicTokenizer.generateInitialTokens(test_text, allocator);
+    const test_text_tokens = try basic_tokenizer.generateInitialTokens(test_text);
     defer test_text_tokens.deinit();
 
     std.debug.print("Original text token count: {any}\n", .{test_text_tokens.items.len});
 
-    const encoded = try basic_tokenizer.encode(test_text, allocator);
-    defer allocator.free(encoded);
+    const encoded = try basic_tokenizer.encode(test_text);
     std.debug.print("Encoded token count: {any}\n", .{encoded.len});
 
-    const decoded = try basic_tokenizer.decode(encoded, allocator);
-    defer allocator.free(decoded);
+    const decoded = try basic_tokenizer.decode(encoded);
 
     // use mem eql on the original text and the decoded text
     std.debug.print("Text matches: {any}\n", .{std.mem.eql(u8, test_text, decoded)});
@@ -81,12 +85,17 @@ pub const BasicTokenizer = struct {
     tokens: std.ArrayList(u16),
     merges: std.ArrayList(Merge),
     vocab: Vocab,
+    arena: ArenaAllocator,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(backing_allocator: std.mem.Allocator) !@This() {
+        var arena = try initArena(backing_allocator);
+        errdefer arena.deinit();
+
         return .{
-            .tokens = std.ArrayList(u16).init(allocator),
-            .merges = std.ArrayList(Merge).init(allocator),
-            .vocab = Vocab.init(allocator),
+            .tokens = std.ArrayList(u16).init(arena.allocator()),
+            .merges = std.ArrayList(Merge).init(arena.allocator()),
+            .vocab = Vocab.init(arena.allocator()),
+            .arena = arena,
         };
     }
 
@@ -94,17 +103,18 @@ pub const BasicTokenizer = struct {
         self.tokens.deinit();
         self.merges.deinit();
         self.vocab.deinit();
+        self.arena.deinit();
     }
 
-    pub fn train(self: *BasicTokenizer, text: []const u8, allocator: std.mem.Allocator, comptime vocab_size: u16) !void {
-        const result = try expandVocabulary(text, vocab_size, allocator);
+    pub fn train(self: *BasicTokenizer, text: []const u8, comptime vocab_size: u16) !void {
+        const result = try self.expandVocabulary(text, vocab_size);
         self.tokens = result.tokens;
         self.merges = result.merges;
-        self.vocab = try createVocab(&self.merges, allocator);
+        self.vocab = try self.createVocab(&self.merges);
     }
 
-    pub fn encode(self: BasicTokenizer, text: []const u8, allocator: std.mem.Allocator) ![]u16 {
-        var encoded = std.ArrayList(u16).init(allocator);
+    pub fn encode(self: *BasicTokenizer, text: []const u8) ![]u16 {
+        var encoded = std.ArrayList(u16).init(self.arena.allocator());
         errdefer encoded.deinit();
 
         var i: usize = 0;
@@ -135,8 +145,8 @@ pub const BasicTokenizer = struct {
         return encoded.toOwnedSlice();
     }
 
-    pub fn decode(self: BasicTokenizer, tokens: []const u16, allocator: std.mem.Allocator) ![]u8 {
-        var result = std.ArrayList(u8).init(allocator);
+    pub fn decode(self: *BasicTokenizer, tokens: []const u16) ![]u8 {
+        var result = std.ArrayList(u8).init(self.arena.allocator());
         errdefer result.deinit();
 
         for (tokens) |token| {
@@ -147,8 +157,8 @@ pub const BasicTokenizer = struct {
         return result.toOwnedSlice();
     }
 
-    pub fn generateInitialTokens(text: []const u8, allocator: std.mem.Allocator) !std.ArrayList(u16) {
-        var tokens = std.ArrayList(u16).init(allocator);
+    fn generateInitialTokens(self: *BasicTokenizer, text: []const u8) !std.ArrayList(u16) {
+        var tokens = std.ArrayList(u16).init(self.arena.allocator());
         var utf8 = try std.unicode.Utf8View.init(text);
         var iter = utf8.iterator();
 
@@ -159,12 +169,12 @@ pub const BasicTokenizer = struct {
         return tokens;
     }
 
-    fn createVocab(merges: *const std.ArrayList(Merge), allocator: std.mem.Allocator) !Vocab {
-        var vocab = Vocab.init(allocator);
+    fn createVocab(self: *BasicTokenizer, merges: *const std.ArrayList(Merge)) !Vocab {
+        var vocab = Vocab.init(self.arena.allocator());
 
         // Initialize with byte values
         for (0..256) |i| {
-            const byte_slice = try allocator.dupe(u8, &[_]u8{@intCast(i)});
+            const byte_slice = try self.arena.allocator().dupe(u8, &[_]u8{@intCast(i)});
             try vocab.put(@intCast(i), byte_slice);
         }
 
@@ -173,7 +183,7 @@ pub const BasicTokenizer = struct {
             const p0 = vocab.get(merge.pair.first) orelse return error.InvalidMerge;
             const p1 = vocab.get(merge.pair.second) orelse return error.InvalidMerge;
 
-            var combined = try allocator.alloc(u8, p0.len + p1.len);
+            var combined = try self.arena.allocator().alloc(u8, p0.len + p1.len);
             @memcpy(combined[0..p0.len], p0);
             @memcpy(combined[p0.len..], p1);
 
@@ -183,8 +193,8 @@ pub const BasicTokenizer = struct {
         return vocab;
     }
 
-    fn countCharPairFrequencies(utf8_bytes: []const u16, allocator: std.mem.Allocator) !CharPairFrequencies {
-        var frequencies = CharPairFrequencies.init(allocator);
+    fn countCharPairFrequencies(self: *BasicTokenizer, utf8_bytes: []const u16) !CharPairFrequencies {
+        var frequencies = CharPairFrequencies.init(self.arena.allocator());
         errdefer frequencies.deinit();
 
         var i: usize = 0;
@@ -219,8 +229,8 @@ pub const BasicTokenizer = struct {
         return top_pair;
     }
 
-    fn replaceTopPairWithIndex(tokens: []const u16, top_pair: CharPair, index: u16) !std.ArrayList(u16) {
-        var new_tokens = std.ArrayList(u16).init(std.heap.page_allocator);
+    fn replaceTopPairWithIndex(self: *BasicTokenizer, tokens: []const u16, top_pair: CharPair, index: u16) !std.ArrayList(u16) {
+        var new_tokens = std.ArrayList(u16).init(self.arena.allocator());
         var i: usize = 0;
         while (i < tokens.len) : (i += 1) {
             if (isMatchingPairAtIndex(tokens, i, top_pair)) {
@@ -241,25 +251,25 @@ pub const BasicTokenizer = struct {
         return std.mem.eql(u16, slice, &[_]u16{ pair.first, pair.second });
     }
 
-    fn expandVocabulary(text: []const u8, comptime target_vocab_size: u16, allocator: std.mem.Allocator) !TrainResult {
-        var current_tokens = std.ArrayList(u16).init(allocator);
+    fn expandVocabulary(self: *BasicTokenizer, text: []const u8, comptime target_vocab_size: u16) !TrainResult {
+        var current_tokens = std.ArrayList(u16).init(self.arena.allocator());
         errdefer current_tokens.deinit();
-        const initial_tokens = try generateInitialTokens(text, allocator);
+        const initial_tokens = try self.generateInitialTokens(text);
         defer initial_tokens.deinit();
         try current_tokens.appendSlice(initial_tokens.items);
 
-        var merges = std.ArrayList(Merge).init(allocator);
+        var merges = std.ArrayList(Merge).init(self.arena.allocator());
         errdefer merges.deinit();
 
         comptime var current_index: u16 = 256;
 
         inline while (current_index < target_vocab_size) : (current_index += 1) {
-            var stats = try countCharPairFrequencies(current_tokens.items, allocator);
+            var stats = try self.countCharPairFrequencies(current_tokens.items);
             defer stats.deinit();
             const top_pair = try findMostFrequentPair(stats);
             try merges.append(.{ .pair = top_pair, .new_token = current_index });
 
-            const new_tokens = try replaceTopPairWithIndex(current_tokens.items, top_pair, current_index);
+            const new_tokens = try self.replaceTopPairWithIndex(current_tokens.items, top_pair, current_index);
             current_tokens.deinit();
             current_tokens = new_tokens;
         }
@@ -267,14 +277,12 @@ pub const BasicTokenizer = struct {
         return TrainResult{ .tokens = current_tokens, .merges = merges };
     }
 };
-
-pub fn readFile(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+pub fn readFile(arena: *ArenaAllocator, path: []const u8) ![]u8 {
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
     const file_size = try file.getEndPos();
-    const buffer = try allocator.alloc(u8, file_size);
-    errdefer allocator.free(buffer);
+    const buffer = try arena.allocator().alloc(u8, file_size);
 
     const bytes_read = try file.readAll(buffer);
     if (bytes_read < file_size) {
