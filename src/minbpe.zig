@@ -15,7 +15,7 @@ pub const CharPairFrequencies = struct {
     frequencies: std.AutoHashMap(CharPair, usize),
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) CharPairFrequencies {
+    pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .frequencies = std.AutoHashMap(CharPair, usize).init(allocator),
             .allocator = allocator,
@@ -53,7 +53,8 @@ pub fn main() !void {
     var basic_tokenizer = BasicTokenizer.init(allocator);
     defer basic_tokenizer.deinit();
 
-    const text = try readFile("taylorswift.txt");
+    const text = try readFile(allocator, "taylorswift.txt");
+    defer allocator.free(text);
     try basic_tokenizer.train(text, allocator, 1000);
 
     const test_text = "The official name for the encoding is UTF-8, the spelling used in all Unicode Consortium documents. Most standards officially list it in upper case as well, but all that do are also case-insensitive and utf-8 is often used in code.[citation needed]Some other spellings may also be accepted by standards, e.g. web standards (which include CSS, HTML, XML, and HTTP headers) explicitly allow utf8 (and disallow unicode) and many aliases for encodings.[10] Spellings with a space e.g. UTF 8 should not be used. The official Internet Assigned Numbers Authority also lists csUTF8 as the only alias,[11] which is rarely used.In Windows, UTF-8 is codepage 65001[12] (i.e. CP_UTF8 in source code).In MySQL, UTF-8 is called utf8mb4[13] (with utf8mb3, and its alias utf8, being a subset encoding for characters in the Basic Multilingual Plane[14]).In HP PCL, the Symbol-ID for UTF-8 is 18N.[15]In Oracle Database (since version 9.0), AL32UTF8[16] means UTF-8. See also CESU-8 for an almost synonym with UTF-8 that rarely should be used.UTF-8-BOM and UTF-8-NOBOM are sometimes used for text files which contain or do not contain a byte-order mark (BOM), respectively.[citation needed] In Japan especially, UTF-8 encoding without a BOM is sometimes called UTF-8N.[17][18]";
@@ -63,9 +64,11 @@ pub fn main() !void {
     std.debug.print("Original text token count: {any}\n", .{test_text_tokens.items.len});
 
     const encoded = try basic_tokenizer.encode(test_text, allocator);
+    defer allocator.free(encoded);
     std.debug.print("Encoded token count: {any}\n", .{encoded.len});
 
     const decoded = try basic_tokenizer.decode(encoded, allocator);
+    defer allocator.free(decoded);
 
     // use mem eql on the original text and the decoded text
     std.debug.print("Text matches: {any}\n", .{std.mem.eql(u8, test_text, decoded)});
@@ -79,7 +82,7 @@ pub const BasicTokenizer = struct {
     merges: std.ArrayList(Merge),
     vocab: Vocab,
 
-    pub fn init(allocator: std.mem.Allocator) BasicTokenizer {
+    pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .tokens = std.ArrayList(u16).init(allocator),
             .merges = std.ArrayList(Merge).init(allocator),
@@ -93,7 +96,7 @@ pub const BasicTokenizer = struct {
         self.vocab.deinit();
     }
 
-    pub fn train(self: *BasicTokenizer, text: []const u8, allocator: std.mem.Allocator, vocab_size: u16) !void {
+    pub fn train(self: *BasicTokenizer, text: []const u8, allocator: std.mem.Allocator, comptime vocab_size: u16) !void {
         const result = try expandVocabulary(text, vocab_size, allocator);
         self.tokens = result.tokens;
         self.merges = result.merges;
@@ -235,10 +238,10 @@ pub const BasicTokenizer = struct {
 
         const tokenPair = TokenPair{ .tokens = tokens, .index = index };
         const slice = tokenPair.slice();
-        return slice[0] == pair.first and slice[1] == pair.second;
+        return std.mem.eql(u16, slice, &[_]u16{ pair.first, pair.second });
     }
 
-    fn expandVocabulary(text: []const u8, target_vocab_size: u16, allocator: std.mem.Allocator) !TrainResult {
+    fn expandVocabulary(text: []const u8, comptime target_vocab_size: u16, allocator: std.mem.Allocator) !TrainResult {
         var current_tokens = std.ArrayList(u16).init(allocator);
         errdefer current_tokens.deinit();
         const initial_tokens = try generateInitialTokens(text, allocator);
@@ -248,9 +251,9 @@ pub const BasicTokenizer = struct {
         var merges = std.ArrayList(Merge).init(allocator);
         errdefer merges.deinit();
 
-        var current_index: u16 = 256;
+        comptime var current_index: u16 = 256;
 
-        while (current_index < target_vocab_size) : (current_index += 1) {
+        inline while (current_index < target_vocab_size) : (current_index += 1) {
             var stats = try countCharPairFrequencies(current_tokens.items, allocator);
             defer stats.deinit();
             const top_pair = try findMostFrequentPair(stats);
@@ -265,13 +268,18 @@ pub const BasicTokenizer = struct {
     }
 };
 
-pub fn readFile(path: []const u8) ![]u8 {
+pub fn readFile(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
     const file_size = try file.getEndPos();
-    const buffer = try std.heap.page_allocator.alloc(u8, file_size);
-    _ = try file.readAll(buffer);
+    const buffer = try allocator.alloc(u8, file_size);
+    errdefer allocator.free(buffer);
+
+    const bytes_read = try file.readAll(buffer);
+    if (bytes_read < file_size) {
+        return error.UnexpectedEOF;
+    }
 
     return buffer;
 }
