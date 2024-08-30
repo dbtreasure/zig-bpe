@@ -64,3 +64,26 @@ The current implementation and tests are designed to work with simplified UTF-8.
 ## Limitations
 
 The current implementation and tests only work with simplified UTF-8 encoding, which means it may not correctly handle all Unicode characters or edge cases. Future updates will focus on improving Unicode support.
+## Updated MinBPE Implementation (minbpe.zig)
+
+The `minbpe.zig` file provides an improved and more modular implementation of the Byte Pair Encoding (BPE) algorithm. Key improvements and features include:
+
+1. **Modular Structure**: The code is organized into a `BasicTokenizer` struct, encapsulating all BPE-related functionality.
+
+2. **Memory Management**: Uses an `ArenaAllocator` for efficient memory management, reducing the need for manual memory deallocation.
+
+3. **Improved UTF-8 Handling**: The implementation correctly handles UTF-8 encoded text, supporting a wider range of input data.
+
+4. **Vocabulary Management**: Includes a `Vocab` type and methods for creating and managing the BPE vocabulary.
+
+5. **Flexible Token Type**: Uses `u16` for tokens, allowing for a larger vocabulary size compared to `u8`.
+
+6. **Comprehensive Error Handling**: Implements more robust error handling throughout the tokenization process.
+
+7. **Efficient Encoding and Decoding**: Provides optimized methods for encoding text to tokens and decoding tokens back to text.
+
+8. **Training Functionality**: Includes a `train` method to learn BPE merges from input text.
+
+9. **Clear API**: Offers a clear and easy-to-use API for tokenization, training, encoding, and decoding.
+
+This updated implementation provides a more robust and efficient BPE tokenization solution, suitable for a wider range of applications and input data types.
