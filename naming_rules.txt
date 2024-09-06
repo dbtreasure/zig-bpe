@@ -1,0 +1,74 @@
+Here are the idiomatic naming conventions for Zig symbols:
+
+1. Types (including structs, unions, enums) use PascalCase:
+
+```zig
+const Point = struct {
+    x: i32,
+    y: i32,
+};
+```
+
+2. Functions that return a type use PascalCase:
+
+```zig
+fn LinkedList(comptime T: type) type {
+    // Returns a struct type
+}
+```
+
+3. Other callable symbols (functions, methods) use camelCase:
+
+```zig
+fn addNumbers(a: i32, b: i32) i32 {
+    return a + b;
+}
+```
+
+4. Variables, constants, and struct fields use snake_case:
+
+```zig
+const max_value: i32 = 100;
+var current_count: u32 = 0;
+
+const User = struct {
+    first_name: []const u8,
+    last_name: []const u8,
+};
+```
+
+5. Namespaces (structs with 0 fields that are never instantiated) use snake_case:
+
+```zig
+const math_utils = struct {
+    pub fn square(x: f32) f32 {
+        return x * x;
+    }
+};
+```
+
+6. Error sets use PascalCase for the set name, and the error values use snake_case:
+
+```zig
+const FileError = error{
+    file_not_found,
+    permission_denied,
+};
+```
+
+7. Acronyms in identifiers are typically treated as words:
+
+```zig
+const HttpClient = struct {};
+fn parseJson(data: []const u8) !void {}
+```
+
+These conventions help make Zig code more consistent and readable. However, it's worth noting that while these are the recommended conventions, they are not enforced by the compiler. The Zig community generally follows these guidelines for consistency across projects and libraries[1][4][5].
+
+Citations:
+[1] https://ziglang.org/documentation/master/
+[2] https://www.reddit.com/r/Zig/comments/16him8q/name_casing_in_zig_snake_case_camelcase/
+[3] https://en.wikipedia.org/wiki/Zig_%28programming_language%29
+[4] https://github.com/ziglang/zig/issues/1097
+[5] https://nathancraddock.com/blog/zig-naming-conventions/
+[6] https://www.openmymind.net/learning_zig/style_guide/

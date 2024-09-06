@@ -1,17 +1,41 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
-pub fn main() !void {
-    const my_test = "é";
-    try getTokensFromString(my_test);
+fn allocLower(allocator: Allocator, str: []const u8) ![]const u8 {
+    var dest = try allocator.alloc(u8, str.len);
+
+    for (str, 0..) |c, i| {
+        dest[i] = switch (c) {
+            'A'...'Z' => c + 32,
+            else => c,
+        };
+    }
+
+    return dest;
 }
 
-pub fn getTokensFromString(text: []const u8) !void {
-    var utf8 = try std.unicode.Utf8View.init(text);
-    var iter = utf8.iterator();
+fn isSpecial(allocator: Allocator, name: []const u8) !bool {
+    const lower = try allocLower(allocator, name);
+    return std.mem.eql(u8, lower, "admin");
+}
 
-    while (iter.nextCodepointSlice()) |byte_slice| {
-        for (byte_slice) |byte| {
-            std.debug.print("UTF-8 byte: {}\n", .{byte});
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer {
+        const check = gpa.deinit();
+        if (check == .leak) {
+            std.debug.print("Memory leak detected!\n", .{});
         }
+    }
+    const allocator = gpa.allocator();
+
+    const str = "Hello, world!";
+
+    // check if the string is special
+    const is_special = try isSpecial(allocator, str);
+    if (is_special) {
+        std.debug.print("The string is special!\n", .{});
+    } else {
+        std.debug.print("The string is not special!\n", .{});
     }
 }
