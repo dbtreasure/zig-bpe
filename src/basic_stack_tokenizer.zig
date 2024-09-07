@@ -12,18 +12,22 @@ const Merge = struct {
 };
 
 const Merges = struct {
-    merges: std.ArrayList(Merge),
+    merges: std.AutoHashMap(CharPair, u16),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
-            .merges = std.ArrayList(Merge).init(allocator),
+            .merges = std.AutoHashMap(CharPair, u16).init(allocator),
             .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *Merges) void {
         self.merges.deinit();
+    }
+
+    pub fn put(self: *Merges, pair: CharPair, new_token: u16) !void {
+        try self.merges.put(pair, new_token);
     }
 };
 
@@ -38,12 +42,12 @@ const PairCount = struct {
 };
 
 const CharPairFrequencies = struct {
-    frequencies: std.AutoHashMap(CharPair, usize),
+    frequencies: std.AutoHashMap(u32, usize),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
-            .frequencies = std.AutoHashMap(CharPair, usize).init(allocator),
+            .frequencies = std.AutoHashMap(u32, usize).init(allocator),
             .allocator = allocator,
         };
     }
@@ -74,7 +78,10 @@ pub const BasicTokenizer = struct {
         if (vocabSize < 256) {
             return TrainError.InvalidVocabSize;
         }
+        // print text length
+        std.debug.print("text length: {}\n", .{text.len});
         const tokens = try generateInitialTokens(self.allocator, text);
+        std.debug.print("tokens length: {}\n", .{tokens.items.len});
         try self.expandVocabulary(self.allocator, tokens, vocabSize);
     }
 
@@ -82,15 +89,8 @@ pub const BasicTokenizer = struct {
         var tokens = std.ArrayList(u16).init(allocator);
         errdefer tokens.deinit();
 
-        var utf8 = std.unicode.Utf8View.init(text) catch {
-            return TrainError.InvalidUtf8;
-        };
-        var iter = utf8.iterator();
-
-        while (iter.nextCodepointSlice()) |byte_slice| {
-            tokens.append(byte_slice[0]) catch {
-                return TrainError.OutOfMemory;
-            };
+        for (text) |byte| {
+            try tokens.append(@as(u16, byte));
         }
 
         return tokens;
@@ -113,7 +113,18 @@ pub const BasicTokenizer = struct {
                 .first = @as(u16, @truncate(topPair.pair >> 16)),
                 .second = @as(u16, @truncate(topPair.pair & 0xFFFF)),
             };
-            try merges.merges.append(.{ .pair = charPair, .new_token = currentIndex });
+            try merges.put(charPair, currentIndex);
+
+            // Add this print statement
+            std.debug.print("merge {d}/{d}: ({d},{d}) -> {d} had {d} occurrences\n", .{
+                currentIndex - vocabStart + 1,
+                vocabSize - vocabStart,
+                charPair.first,
+                charPair.second,
+                currentIndex,
+                topPair.count,
+            });
+
             try replaceTopPairWithIndex(&currentTokens, charPair, currentIndex);
         }
 
@@ -122,14 +133,22 @@ pub const BasicTokenizer = struct {
 
     fn replaceTopPairWithIndex(tokens: *std.ArrayList(u16), pair: CharPair, newToken: u16) TrainError!void {
         var i: usize = 0;
+        var j: usize = 0;
         while (i < tokens.items.len - 1) {
             if (tokens.items[i] == pair.first and tokens.items[i + 1] == pair.second) {
-                _ = tokens.orderedRemove(i + 1);
-                tokens.items[i] = newToken;
+                tokens.items[j] = newToken;
+                i += 2;
             } else {
+                tokens.items[j] = tokens.items[i];
                 i += 1;
             }
+            j += 1;
         }
+        if (i < tokens.items.len) {
+            tokens.items[j] = tokens.items[i];
+            j += 1;
+        }
+        try tokens.resize(j);
     }
 };
 
@@ -168,11 +187,11 @@ fn sortCodePointPairs(pairCounts: std.AutoHashMap(u32, usize), allocator: std.me
         };
     }
 
-    std.mem.sort(PairCount, sortedPairs, {}, comptime lessThan);
+    std.mem.sort(PairCount, sortedPairs, {}, struct {
+        pub fn compare(_: void, a: PairCount, b: PairCount) bool {
+            return a.count > b.count;
+        }
+    }.compare);
 
     return sortedPairs;
-}
-
-fn lessThan(_: void, a: PairCount, b: PairCount) bool {
-    return a.count > b.count; // Sort in descending order
 }
