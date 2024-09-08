@@ -74,26 +74,39 @@ pub const BasicTokenizer = struct {
         self.tokens.deinit();
     }
 
-    pub fn train(self: *BasicTokenizer, text: []const u8, vocabSize: u16) TrainError!void {
+    pub fn train(self: *BasicTokenizer, text: []const u8, vocabSize: u16, comptime expected_size: comptime_int) TrainError!void {
         if (vocabSize < 256) {
             return TrainError.InvalidVocabSize;
         }
-        // print text length
-        std.debug.print("text length: {}\n", .{text.len});
-        const tokens = try generateInitialTokens(self.allocator, text);
-        std.debug.print("tokens length: {}\n", .{tokens.items.len});
+
+        const tokens = try generateInitialTokens(text, expected_size);
         try self.expandVocabulary(self.allocator, tokens, vocabSize);
     }
 
-    fn generateInitialTokens(allocator: std.mem.Allocator, text: []const u8) TrainError!std.ArrayList(u16) {
-        var tokens = std.ArrayList(u16).init(allocator);
+    fn generateInitialTokens(text: []const u8, expected_size: comptime_int) TrainError!std.ArrayList(u16) {
+        const buffer_size = nextPowerOfTwo(expected_size * @sizeOf(u16));
+        var buf: [buffer_size]u8 = undefined;
+        var fa = std.heap.FixedBufferAllocator.init(&buf);
+        fa.reset();
+        var tokens = try std.ArrayList(u16).initCapacity(fa.allocator(), text.len);
         errdefer tokens.deinit();
 
         for (text) |byte| {
-            try tokens.append(@as(u16, byte));
+            try tokens.append(byte);
         }
 
         return tokens;
+    }
+
+    fn nextPowerOfTwo(n: comptime_int) comptime_int {
+        var v = n;
+        v -= 1;
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        return v + 1;
     }
 
     fn expandVocabulary(self: *BasicTokenizer, allocator: std.mem.Allocator, tokens: std.ArrayList(u16), vocabSize: u16) TrainError!void {
@@ -116,14 +129,14 @@ pub const BasicTokenizer = struct {
             try merges.put(charPair, currentIndex);
 
             // Add this print statement
-            std.debug.print("merge {d}/{d}: ({d},{d}) -> {d} had {d} occurrences\n", .{
-                currentIndex - vocabStart + 1,
-                vocabSize - vocabStart,
-                charPair.first,
-                charPair.second,
-                currentIndex,
-                topPair.count,
-            });
+            // std.debug.print("merge {d}/{d}: ({d},{d}) -> {d} had {d} occurrences\n", .{
+            //     currentIndex - vocabStart + 1,
+            //     vocabSize - vocabStart,
+            //     charPair.first,
+            //     charPair.second,
+            //     currentIndex,
+            //     topPair.count,
+            // });
 
             try replaceTopPairWithIndex(&currentTokens, charPair, currentIndex);
         }

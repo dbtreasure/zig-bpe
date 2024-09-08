@@ -8,7 +8,7 @@ fn initArena(backing_allocator: std.mem.Allocator) !ArenaAllocator {
     return ArenaAllocator.init(backing_allocator);
 }
 
-const BasicTokenizer = @import("basic_stack_tokenizer.zig").BasicTokenizer;
+const BasicTokenizer = @import("basic_tokenizer.zig").BasicTokenizer;
 const TrainError = @import("basic_tokenizer.zig").TrainError;
 
 pub fn main() !void {
@@ -20,15 +20,15 @@ pub fn main() !void {
     defer tokenizer.deinit();
 
     const text = try readFile(arena.allocator(), "taylorswift.txt");
-    const text_size = try countTextSize(arena.allocator(), "taylorswift.txt");
 
-    std.debug.print("text size: {}\n", .{text_size});
+    // const text_size = comptime countTextSize("taylorswift.txt");
 
     // Start the timer
     const start_time = std.time.milliTimestamp();
 
+    // Use the compile-time text size
+    // try tokenizer.train(text, 1000, text_size);
     try tokenizer.train(text, 300);
-
     // End the timer and calculate the duration
     const end_time = std.time.milliTimestamp();
     const duration_ms = end_time - start_time;
@@ -43,6 +43,6 @@ test "Tokenizer train vocab size error" {
     defer tokenizer.deinit();
 
     // train the tokenizer on some text
-    const result = tokenizer.train("hello", 1);
+    const result = tokenizer.train("hello", 1, 5);
     try std.testing.expectError(TrainError.InvalidVocabSize, result);
 }
