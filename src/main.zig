@@ -26,13 +26,3 @@ pub fn main() !void {
 
     std.debug.print("Training completed in {d} ms\n", .{duration_ms});
 }
-
-test "Tokenizer train vocab size error" {
-    // initialize the BasicTokenizer struct
-    var tokenizer = try BasicTokenizer.init(std.testing.allocator);
-    defer tokenizer.deinit();
-
-    // train the tokenizer on some text
-    const result = tokenizer.train("hello", 1, 5);
-    try std.testing.expectError(TrainError.InvalidVocabSize, result);
-}

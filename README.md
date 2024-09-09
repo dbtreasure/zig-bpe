@@ -25,20 +25,6 @@ To run the main program:
 zig run src/main.zig
 ```
 
-## Testing
-
-To run the tests for this project:
-
-```
-zig test src/main.zig
-```
-
-This will execute the test cases defined in `main.zig`, which verify the functionality of the BasicTokenizer, including training and vocabulary size error handling.
-
-## License
-
-[Add your chosen license here]
-
 ## Limitations
 
 The current implementation works with UTF-8 encoded text but may not handle all edge cases of UTF-8 encoding. Future updates may focus on improving Unicode support and handling more complex scenarios.
