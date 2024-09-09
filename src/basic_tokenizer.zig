@@ -1,5 +1,8 @@
 const std = @import("std");
 
+const TimeStats = @import("utils/time_statistics.zig").TimeStats;
+const printTimeStats = @import("utils/time_statistics.zig").printTimeStats;
+
 pub const TrainError = error{
     InvalidVocabSize,
     InvalidUtf8,
@@ -66,29 +69,20 @@ const vocabStart: u16 = 256;
 pub const BasicTokenizer = struct {
     allocator: std.mem.Allocator,
     tokens: std.ArrayList(u16),
-    time_stats: TimeStats,
-
-    const TimeStats = struct {
-        sort_pairs_time: i64 = 0,
-        sort_pairs_calls: usize = 0,
-        replace_pair_time: i64 = 0,
-        replace_pair_calls: usize = 0,
-        generate_pairs_time: i64 = 0,
-        generate_pairs_calls: usize = 0,
-        just_count_pairs_time: i64 = 0,
-        just_count_pairs_calls: usize = 0,
-    };
+    timeStats: *TimeStats, // Kept as camelCase
 
     pub fn init(allocator: std.mem.Allocator) !@This() {
+        const timeStats = try TimeStats.init(allocator);
         return .{
             .allocator = allocator,
             .tokens = std.ArrayList(u16).init(allocator),
-            .time_stats = TimeStats{},
+            .timeStats = timeStats, // Kept as camelCase
         };
     }
 
     pub fn deinit(self: *@This()) void {
         self.tokens.deinit();
+        self.timeStats.deinit(); // Kept as camelCase
     }
 
     pub fn train(self: *@This(), text: []const u8, vocabSize: u16) TrainError!void {
@@ -96,7 +90,7 @@ pub const BasicTokenizer = struct {
         defer {
             const end = std.time.milliTimestamp();
             const total_time = end - start;
-            self.printTimeStats(total_time);
+            printTimeStats(self.timeStats, total_time);
         }
 
         if (vocabSize < 256) {
@@ -142,11 +136,11 @@ pub const BasicTokenizer = struct {
 
         var currentIndex: u16 = vocabStart;
         while (currentIndex < vocabSize) : (currentIndex += 1) {
-            var codePointPairs = try self.generateCodePointPairs(&currentTokens, &self.time_stats);
+            var codePointPairs = try self.generateCodePointPairs(&currentTokens, self.timeStats);
             defer codePointPairs.deinit();
-            var codePointPairCounts = try self.countPointPairs(&codePointPairs, &self.time_stats);
+            var codePointPairCounts = try self.countPointPairs(&codePointPairs, self.timeStats);
             defer codePointPairCounts.deinit();
-            const sortedCodePointPairs = try self.sortCodePointPairs(codePointPairCounts, &self.time_stats);
+            const sortedCodePointPairs = try self.sortCodePointPairs(codePointPairCounts, self.timeStats);
             defer self.allocator.free(sortedCodePointPairs);
 
             const topCodePointPair = sortedCodePointPairs[0];
@@ -163,13 +157,13 @@ pub const BasicTokenizer = struct {
             //     topPair.count,
             // });
 
-            try replaceTopPairWithNewToken(&currentTokens, topCodePointPair, currentIndex, &self.time_stats);
+            try replaceTopPairWithNewToken(&currentTokens, topCodePointPair, currentIndex, self.timeStats);
         }
 
         try self.tokens.appendSlice(currentTokens.items);
     }
 
-    fn replaceTopPairWithNewToken(tokens: *std.ArrayList(u16), pair: PairCount, newToken: u16, stats: *BasicTokenizer.TimeStats) TrainError!void {
+    fn replaceTopPairWithNewToken(tokens: *std.ArrayList(u16), pair: PairCount, newToken: u16, stats: *TimeStats) TrainError!void {
         const charPair = CharPair{
             .first = @as(u16, @truncate(pair.pair >> 16)),
             .second = @as(u16, @truncate(pair.pair & 0xFFFF)),
@@ -200,34 +194,7 @@ pub const BasicTokenizer = struct {
         try tokens.resize(j);
     }
 
-    fn printTimeStats(self: *BasicTokenizer, total_time: i64) void {
-        const stats = &self.time_stats;
-        std.debug.print("\nTime statistics:\n", .{});
-        std.debug.print("sortCodePointPairs: {d:.3}s total, {d} calls, {d:.3}s avg\n", .{
-            @as(f64, @floatFromInt(stats.sort_pairs_time)) / 1000.0,
-            stats.sort_pairs_calls,
-            @as(f64, @floatFromInt(stats.sort_pairs_time)) / (@as(f64, @floatFromInt(stats.sort_pairs_calls)) * 1000.0),
-        });
-        std.debug.print("replaceTopPairWithIndex: {d:.3}s total, {d} calls, {d:.3}s avg\n", .{
-            @as(f64, @floatFromInt(stats.replace_pair_time)) / 1000.0,
-            stats.replace_pair_calls,
-            @as(f64, @floatFromInt(stats.replace_pair_time)) / (@as(f64, @floatFromInt(stats.replace_pair_calls)) * 1000.0),
-        });
-        std.debug.print("generateCodePointPairs: {d:.3}s total, {d} calls, {d:.3}s avg\n", .{
-            @as(f64, @floatFromInt(stats.generate_pairs_time)) / 1000.0,
-            stats.generate_pairs_calls,
-            @as(f64, @floatFromInt(stats.generate_pairs_time)) / (@as(f64, @floatFromInt(stats.generate_pairs_calls)) * 1000.0),
-        });
-        std.debug.print("countPointPairs: {d:.3}s total, {d} calls, {d:.3}s avg\n", .{
-            @as(f64, @floatFromInt(stats.just_count_pairs_time)) / 1000.0,
-            stats.just_count_pairs_calls,
-            @as(f64, @floatFromInt(stats.just_count_pairs_time)) / (@as(f64, @floatFromInt(stats.just_count_pairs_calls)) * 1000.0),
-        });
-        const other_time = total_time - stats.sort_pairs_time - stats.replace_pair_time - stats.generate_pairs_time - stats.just_count_pairs_time;
-        std.debug.print("Other operations: {d:.3}s\n", .{@as(f64, @floatFromInt(other_time)) / 1000.0});
-    }
-
-    fn generateCodePointPairs(self: *BasicTokenizer, tokens: *std.ArrayList(u16), stats: *BasicTokenizer.TimeStats) !std.ArrayList(u32) {
+    fn generateCodePointPairs(self: *BasicTokenizer, tokens: *std.ArrayList(u16), stats: *TimeStats) !std.ArrayList(u32) {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -247,7 +214,7 @@ pub const BasicTokenizer = struct {
         return pairs;
     }
 
-    fn countPointPairs(self: *BasicTokenizer, pairs: *std.ArrayList(u32), stats: *BasicTokenizer.TimeStats) !std.AutoHashMap(u32, usize) {
+    fn countPointPairs(self: *BasicTokenizer, pairs: *std.ArrayList(u32), stats: *TimeStats) !std.AutoHashMap(u32, usize) {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -270,7 +237,7 @@ pub const BasicTokenizer = struct {
         return pairCountsNew;
     }
 
-    fn sortCodePointPairs(self: *BasicTokenizer, pairCounts: std.AutoHashMap(u32, usize), stats: *BasicTokenizer.TimeStats) ![]PairCount {
+    fn sortCodePointPairs(self: *BasicTokenizer, pairCounts: std.AutoHashMap(u32, usize), stats: *TimeStats) ![]PairCount {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();

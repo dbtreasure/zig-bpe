@@ -2,6 +2,7 @@ const std = @import("std");
 const readFile = @import("utils/read_file.zig").readFile;
 const BasicTokenizer = @import("basic_tokenizer.zig").BasicTokenizer;
 const TrainError = @import("basic_tokenizer.zig").TrainError;
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
