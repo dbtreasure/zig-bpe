@@ -30,30 +30,10 @@ zig run src/main.zig
 To run the tests for this project:
 
 ```
-zig test src/compression.test.zig
+zig test src/main.zig
 ```
 
-This will execute the test cases defined in `compression.test.zig`, which verify the functionality of the compression, expansion, encoding, and decoding algorithms.
-
-## Configuration
-
-You can modify the `INPUT_FILE_PATH` and `DEFAULT_INDEX` in `constants.zig` to change the input file and the replacement index used in compression.
-
-## Simplified UTF-8 Handling
-
-The current implementation and tests are designed to work with simplified UTF-8. This means that the code assumes the input text is valid UTF-8 and does not handle all edge cases of UTF-8 encoding. Specifically:
-
-- The `getTokensFromString` function converts UTF-8 encoded text into Unicode code points, assuming all characters fit within the `u21` type.
-- The `getStringFromTokens` function converts Unicode code points back into UTF-8 encoded text.
-- The tests in `src/compression.test.zig` verify the functionality using simplified UTF-8 input files.
-
-## Recent Changes
-
-- Added unit tests to verify the compression, expansion, encoding, and decoding algorithms' functionality.
-- Made key functions public to allow testing from external modules.
-- Updated the implementation to handle simplified UTF-8 encoding and decoding.
-- Extracted the logic for finding the longest matching sequence into a separate function.
-- Added a new test case to test the encoding and decoding process using the `simple_input.txt` file.
+This will execute the test cases defined in `main.zig`, which verify the functionality of the BasicTokenizer, including training and vocabulary size error handling.
 
 ## License
 
@@ -61,7 +41,7 @@ The current implementation and tests are designed to work with simplified UTF-8.
 
 ## Limitations
 
-The current implementation and tests only work with simplified UTF-8 encoding, which means it may not correctly handle all Unicode characters or edge cases. Future updates will focus on improving Unicode support.
+The current implementation works with UTF-8 encoded text but may not handle all edge cases of UTF-8 encoding. Future updates may focus on improving Unicode support and handling more complex scenarios.
 
 ## Current Implementation (basic_tokenizer.zig)
 
