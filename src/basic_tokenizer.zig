@@ -119,20 +119,12 @@ pub const BasicTokenizer = struct {
     }
 
     fn expandVocabulary(self: *BasicTokenizer, tokens: std.ArrayList(u16), vocabSize: u16) TrainError!void {
-        const start = std.time.milliTimestamp();
-        defer {
-            const end = std.time.milliTimestamp();
-            std.debug.print("expandVocabulary runtime: {d:.3} seconds\n", .{@as(f64, @floatFromInt(end - start)) / 1000.0});
-        }
-
         var currentTokens = try std.ArrayList(u16).initCapacity(self.allocator, tokens.items.len);
         try currentTokens.appendSlice(tokens.items);
         defer currentTokens.deinit();
 
         var merges = Merges.init(self.allocator);
         defer merges.deinit();
-
-        std.debug.print("vocab len: {}\n", .{vocabSize});
 
         var currentIndex: u16 = vocabStart;
         while (currentIndex < vocabSize) : (currentIndex += 1) {
@@ -147,15 +139,14 @@ pub const BasicTokenizer = struct {
 
             try merges.put(topCodePointPair, currentIndex);
 
-            // Add this print statement
-            // std.debug.print("merge {d}/{d}: ({d},{d}) -> {d} had {d} occurrences\n", .{
-            //     currentIndex - vocabStart + 1,
-            //     vocabSize - vocabStart,
-            //     charPair.first,
-            //     charPair.second,
-            //     currentIndex,
-            //     topPair.count,
-            // });
+            std.debug.print("merge {d}/{d}: ({d},{d}) -> {d} had {d} occurrences\n", .{
+                currentIndex - vocabStart + 1,
+                vocabSize - vocabStart,
+                @as(u16, @truncate(topCodePointPair.pair >> 16)),
+                @as(u16, @truncate(topCodePointPair.pair & 0xFFFF)),
+                currentIndex,
+                topCodePointPair.count,
+            });
 
             try replaceTopPairWithNewToken(&currentTokens, topCodePointPair, currentIndex, self.timeStats);
         }

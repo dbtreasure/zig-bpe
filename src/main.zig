@@ -14,13 +14,10 @@ pub fn main() !void {
     const text = try readFile(allocator, "taylorswift.txt");
     defer allocator.free(text);
 
-    std.debug.print("Text: {any}\n", .{text.len});
-    // Start the timer
     const start_time = std.time.milliTimestamp();
 
     try tokenizer.train(text, 300);
 
-    // End the timer and calculate the duration
     const end_time = std.time.milliTimestamp();
     const duration_ms = end_time - start_time;
 
