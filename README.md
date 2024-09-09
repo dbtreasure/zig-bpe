@@ -1,23 +1,21 @@
-# BPE Compression in Zig
+# Zig Tokenizer
 
-This project implements Byte Pair Encoding (BPE) compression in Zig. It includes functionality to compress tokens using BPE, expand the vocabulary, and decode compressed tokens.
+This project implements a basic tokenizer in Zig, focusing on text processing and Byte Pair Encoding (BPE) concepts.
 
 ## Features
 
 - Read input from a file
-- Convert text to tokens
-- Compute statistics on token pairs
-- Replace top pairs with new indices
-- Expand vocabulary using BPE algorithm
-- Create vocabulary from merges
-- Encode text using the created vocabulary
-- Decode compressed tokens back to original text
+- Convert text to initial tokens
+- Expand vocabulary using a simplified BPE-like approach
+- Train the tokenizer on input text
+- Measure and report performance statistics
 
 ## File Structure
 
-- `src/main.zig`: Main implementation of BPE compression, expansion, encoding, and decoding
-- `src/constants.zig`: Constants used throughout the project
-- `src/compression.test.zig`: Comprehensive test cases for all major functions
+- `src/main.zig`: Main entry point and example usage
+- `src/basic_tokenizer.zig`: Core implementation of the BasicTokenizer
+- `src/utils/read_file.zig`: Utility function for reading files
+- `src/utils/time_statistics.zig`: Performance measurement utilities
 
 ## Running the Project
 
@@ -64,26 +62,25 @@ The current implementation and tests are designed to work with simplified UTF-8.
 ## Limitations
 
 The current implementation and tests only work with simplified UTF-8 encoding, which means it may not correctly handle all Unicode characters or edge cases. Future updates will focus on improving Unicode support.
-## Updated MinBPE Implementation (minbpe.zig)
 
-The `minbpe.zig` file provides an improved and more modular implementation of the Byte Pair Encoding (BPE) algorithm. Key improvements and features include:
+## Current Implementation (basic_tokenizer.zig)
 
-1. **Modular Structure**: The code is organized into a `BasicTokenizer` struct, encapsulating all BPE-related functionality.
+The `basic_tokenizer.zig` file provides the core implementation of the tokenizer. Key features include:
 
-2. **Memory Management**: Uses an `ArenaAllocator` for efficient memory management, reducing the need for manual memory deallocation.
+1. **Modular Structure**: The code is organized into a `BasicTokenizer` struct, encapsulating all tokenization-related functionality.
 
-3. **Improved UTF-8 Handling**: The implementation correctly handles UTF-8 encoded text, supporting a wider range of input data.
+2. **Memory Management**: Uses Zig's allocator interface for efficient memory management.
 
-4. **Vocabulary Management**: Includes a `Vocab` type and methods for creating and managing the BPE vocabulary.
+3. **UTF-8 Handling**: The implementation handles UTF-8 encoded text, supporting a wide range of input data.
 
-5. **Flexible Token Type**: Uses `u16` for tokens, allowing for a larger vocabulary size compared to `u8`.
+4. **Vocabulary Management**: Includes methods for creating and managing the tokenizer's vocabulary.
 
-6. **Comprehensive Error Handling**: Implements more robust error handling throughout the tokenization process.
+5. **Flexible Token Type**: Uses appropriate types for tokens, allowing for customizable vocabulary sizes.
 
-7. **Efficient Encoding and Decoding**: Provides optimized methods for encoding text to tokens and decoding tokens back to text.
+6. **Error Handling**: Implements error handling throughout the tokenization process.
 
-8. **Training Functionality**: Includes a `train` method to learn BPE merges from input text.
+7. **Training Functionality**: Includes a `train` method to learn from input text.
 
-9. **Clear API**: Offers a clear and easy-to-use API for tokenization, training, encoding, and decoding.
+8. **Clear API**: Offers a clear and easy-to-use API for tokenization and training.
 
-This updated implementation provides a more robust and efficient BPE tokenization solution, suitable for a wider range of applications and input data types.
+This implementation provides a foundation for text tokenization, suitable for various applications and input data types.
