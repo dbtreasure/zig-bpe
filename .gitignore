@@ -3,3 +3,5 @@ zig-out/
 zig-docs/
 .vscode/
 naming_rules.txt
+main
+main.o
