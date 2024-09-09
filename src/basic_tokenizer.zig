@@ -69,20 +69,20 @@ const vocabStart: u16 = 256;
 pub const BasicTokenizer = struct {
     allocator: std.mem.Allocator,
     tokens: std.ArrayList(u16),
-    timeStats: *TimeStats, // Kept as camelCase
+    timeStats: *TimeStats,
 
     pub fn init(allocator: std.mem.Allocator) !@This() {
         const timeStats = try TimeStats.init(allocator);
         return .{
             .allocator = allocator,
             .tokens = std.ArrayList(u16).init(allocator),
-            .timeStats = timeStats, // Kept as camelCase
+            .timeStats = timeStats,
         };
     }
 
     pub fn deinit(self: *@This()) void {
         self.tokens.deinit();
-        self.timeStats.deinit(); // Kept as camelCase
+        self.timeStats.deinit();
     }
 
     pub fn train(self: *@This(), text: []const u8, vocabSize: u16) TrainError!void {
@@ -130,23 +130,18 @@ pub const BasicTokenizer = struct {
         while (currentIndex < vocabSize) : (currentIndex += 1) {
             var codePointPairs = try self.generateCodePointPairs(&currentTokens, self.timeStats);
             defer codePointPairs.deinit();
-            var codePointPairCounts = try self.countPointPairs(&codePointPairs, self.timeStats);
+
+            var codePointPairCounts = try self.countCodePointPairs(&codePointPairs, self.timeStats);
             defer codePointPairCounts.deinit();
+
             const sortedCodePointPairs = try self.sortCodePointPairs(codePointPairCounts, self.timeStats);
             defer self.allocator.free(sortedCodePointPairs);
 
             const topCodePointPair = sortedCodePointPairs[0];
 
-            try merges.put(topCodePointPair, currentIndex);
+            self.printMergeInfo(currentIndex, vocabSize, topCodePointPair);
 
-            std.debug.print("merge {d}/{d}: ({d},{d}) -> {d} had {d} occurrences\n", .{
-                currentIndex - vocabStart + 1,
-                vocabSize - vocabStart,
-                @as(u16, @truncate(topCodePointPair.pair >> 16)),
-                @as(u16, @truncate(topCodePointPair.pair & 0xFFFF)),
-                currentIndex,
-                topCodePointPair.count,
-            });
+            try merges.put(topCodePointPair, currentIndex);
 
             try replaceTopPairWithNewToken(&currentTokens, topCodePointPair, currentIndex, self.timeStats);
         }
@@ -205,7 +200,7 @@ pub const BasicTokenizer = struct {
         return pairs;
     }
 
-    fn countPointPairs(self: *BasicTokenizer, pairs: *std.ArrayList(u32), stats: *TimeStats) !std.AutoHashMap(u32, usize) {
+    fn countCodePointPairs(self: *BasicTokenizer, pairs: *std.ArrayList(u32), stats: *TimeStats) !std.AutoHashMap(u32, usize) {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -255,5 +250,16 @@ pub const BasicTokenizer = struct {
         }.compare);
 
         return sortedPairs;
+    }
+
+    fn printMergeInfo(_: *BasicTokenizer, currentIndex: u16, vocabSize: u16, topCodePointPair: PairCount) void {
+        std.debug.print("merge {d}/{d}: ({d},{d}) -> {d} had {d} occurrences\n", .{
+            currentIndex - vocabStart + 1,
+            vocabSize - vocabStart,
+            @as(u16, @truncate(topCodePointPair.pair >> 16)),
+            @as(u16, @truncate(topCodePointPair.pair & 0xFFFF)),
+            currentIndex,
+            topCodePointPair.count,
+        });
     }
 };
