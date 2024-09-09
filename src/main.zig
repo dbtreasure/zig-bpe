@@ -16,7 +16,7 @@ pub fn main() !void {
 
     const start_time = std.time.milliTimestamp();
 
-    try tokenizer.train(text, 300);
+    try tokenizer.train(text, 300, false);
 
     const end_time = std.time.milliTimestamp();
     const duration_ms = end_time - start_time;

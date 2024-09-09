@@ -85,7 +85,7 @@ pub const BasicTokenizer = struct {
         self.timeStats.deinit();
     }
 
-    pub fn train(self: *@This(), text: []const u8, vocabSize: u16) TrainError!void {
+    pub fn train(self: *@This(), text: []const u8, vocabSize: u16, verbose: bool) TrainError!void {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -98,7 +98,7 @@ pub const BasicTokenizer = struct {
         }
         const tokens = try self.generateInitialTokens(text);
         defer tokens.deinit();
-        try self.expandVocabulary(tokens, vocabSize);
+        try self.expandVocabulary(tokens, vocabSize, verbose);
     }
 
     fn generateInitialTokens(self: *BasicTokenizer, text: []const u8) TrainError!std.ArrayList(u16) {
@@ -118,7 +118,7 @@ pub const BasicTokenizer = struct {
         return tokens;
     }
 
-    fn expandVocabulary(self: *BasicTokenizer, tokens: std.ArrayList(u16), vocabSize: u16) TrainError!void {
+    fn expandVocabulary(self: *BasicTokenizer, tokens: std.ArrayList(u16), vocabSize: u16, verbose: bool) TrainError!void {
         var currentTokens = try std.ArrayList(u16).initCapacity(self.allocator, tokens.items.len);
         try currentTokens.appendSlice(tokens.items);
         defer currentTokens.deinit();
@@ -139,7 +139,9 @@ pub const BasicTokenizer = struct {
 
             const topCodePointPair = sortedCodePointPairs[0];
 
-            self.printMergeInfo(currentIndex, vocabSize, topCodePointPair);
+            if (verbose) {
+                self.printMergeInfo(currentIndex, vocabSize, topCodePointPair);
+            }
 
             try merges.put(topCodePointPair, currentIndex);
 
