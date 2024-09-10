@@ -71,14 +71,12 @@ pub const BasicTokenizer = struct {
     pub fn encode(self: *@This(), text: []const u8) !std.ArrayList(u16) {
         var tokens = try self.generateInitialTokens(text);
 
-        const tokenPairs = try self.generateCodePointPairs(&tokens, self.timeStats, self.allocator);
-        defer tokenPairs.deinit();
-
-        // iterate through self.merges.merges.items and replace the tokens with the new tokens
         for (self.merges.merges.items) |merge| {
-            for (tokenPairs.items) |*tokenPair| {
-                if (tokenPair.first == merge.pair.first and tokenPair.second == merge.pair.second) {
-                    tokenPair.first = merge.new_token;
+            var i: usize = 0;
+            while (i < tokens.items.len) : (i += 1) {
+                if (tokens.items[i] == merge.pair.first and tokens.items[i + 1] == merge.pair.second) {
+                    tokens.items[i] = merge.new_token;
+                    _ = tokens.orderedRemove(i + 1);
                 }
             }
         }
@@ -86,12 +84,61 @@ pub const BasicTokenizer = struct {
         return tokens;
     }
 
+    pub fn decode(self: *@This(), tokens: std.ArrayList(u16)) ![]u8 {
+        var decoded = std.ArrayList(u8).init(self.allocator);
+        errdefer decoded.deinit();
+
+        for (tokens.items) |token| {
+            if (token < 256) {
+                try decoded.append(@truncate(token));
+            } else {
+                if (self.findMerge(token)) |merge| {
+                    try self.decodeMerge(merge, &decoded);
+                } else {
+                    return error.InvalidToken;
+                }
+            }
+        }
+
+        return decoded.toOwnedSlice();
+    }
+
+    fn findMerge(self: *@This(), token: u16) ?Merge {
+        for (self.merges.merges.items) |merge| {
+            if (merge.new_token == token) {
+                return merge;
+            }
+        }
+        return null;
+    }
+
+    fn decodeMerge(self: *@This(), merge: Merge, decoded: *std.ArrayList(u8)) !void {
+        if (merge.pair.first < 256) {
+            try decoded.append(@truncate(merge.pair.first));
+        } else {
+            if (self.findMerge(merge.pair.first)) |subMerge| {
+                try self.decodeMerge(subMerge, decoded);
+            } else {
+                return error.InvalidToken;
+            }
+        }
+
+        if (merge.pair.second < 256) {
+            try decoded.append(@truncate(merge.pair.second));
+        } else {
+            if (self.findMerge(merge.pair.second)) |subMerge| {
+                try self.decodeMerge(subMerge, decoded);
+            } else {
+                return error.InvalidToken;
+            }
+        }
+    }
+
     pub fn train(self: *@This(), text: []const u8, vocabSize: u16, verbose: bool) TrainError!void {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
-            const total_time = end - start;
-            printTimeStats(self.timeStats, total_time);
+            printTimeStats(self.timeStats, end - start);
         }
 
         if (vocabSize < 256) {

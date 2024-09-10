@@ -20,12 +20,17 @@ pub fn main() !void {
     try tokenizer.serializeMerges("merges.txt");
 
     // try tokenizer.deserializeMerges("merges.txt");
-    const tokens = try tokenizer.encode("I'm so excited to see you!");
+    const tokens = try tokenizer.encode("hello world!!!? (안녕하세요!) lol123 😉");
     defer tokens.deinit();
 
     for (tokens.items) |token| {
         std.debug.print("{d} ", .{token});
     }
+
+    const decoded = try tokenizer.decode(tokens);
+    defer allocator.free(decoded);
+
+    std.debug.print("\n{s}\n", .{decoded});
 
     const end_time = std.time.milliTimestamp();
     const duration_ms = end_time - start_time;
