@@ -9,11 +9,6 @@ pub const TrainError = error{
     OutOfMemory,
 };
 
-const Merge = struct {
-    pair: CharPair,
-    new_token: u16,
-};
-
 const Merges = struct {
     merges: std.AutoHashMap(CharPair, u16),
     allocator: std.mem.Allocator,
@@ -30,11 +25,7 @@ const Merges = struct {
     }
 
     pub fn put(self: *Merges, pair: PairCount, new_token: u16) !void {
-        const charPair = CharPair{
-            .first = @as(u16, @truncate(pair.pair >> 16)),
-            .second = @as(u16, @truncate(pair.pair & 0xFFFF)),
-        };
-        try self.merges.put(charPair, new_token);
+        try self.merges.put(pair.pair, new_token);
     }
 };
 
@@ -44,7 +35,7 @@ const CharPair = struct {
 };
 
 const PairCount = struct {
-    pair: u32,
+    pair: CharPair,
     count: usize,
 };
 
@@ -148,11 +139,7 @@ pub const BasicTokenizer = struct {
         }
     }
 
-    fn replaceTopPairWithNewToken(tokens: *std.ArrayList(u16), pair: PairCount, newToken: u16, stats: *TimeStats) TrainError!void {
-        const charPair = CharPair{
-            .first = @as(u16, @truncate(pair.pair >> 16)),
-            .second = @as(u16, @truncate(pair.pair & 0xFFFF)),
-        };
+    fn replaceTopPairWithNewToken(tokens: *std.ArrayList(u16), pairCount: PairCount, newToken: u16, stats: *TimeStats) TrainError!void {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -163,7 +150,7 @@ pub const BasicTokenizer = struct {
         var i: usize = 0;
         var j: usize = 0;
         while (i < tokens.items.len - 1) {
-            if (tokens.items[i] == charPair.first and tokens.items[i + 1] == charPair.second) {
+            if (tokens.items[i] == pairCount.pair.first and tokens.items[i + 1] == pairCount.pair.second) {
                 tokens.items[j] = newToken;
                 i += 2;
             } else {
@@ -179,7 +166,7 @@ pub const BasicTokenizer = struct {
         try tokens.resize(j);
     }
 
-    fn generateCodePointPairs(_: *BasicTokenizer, tokens: *std.ArrayList(u16), stats: *TimeStats, allocator: std.mem.Allocator) !std.ArrayList(u32) {
+    fn generateCodePointPairs(_: *BasicTokenizer, tokens: *std.ArrayList(u16), stats: *TimeStats, allocator: std.mem.Allocator) !std.ArrayList(CharPair) {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -187,19 +174,22 @@ pub const BasicTokenizer = struct {
             stats.generate_pairs_calls += 1;
         }
 
-        var pairs = std.ArrayList(u32).init(allocator);
+        var pairs = std.ArrayList(CharPair).init(allocator);
         errdefer pairs.deinit();
 
         var i: usize = 0;
         while (i < tokens.items.len - 1) : (i += 1) {
-            const pair = (@as(u32, tokens.items[i]) << 16) | tokens.items[i + 1];
-            try pairs.append(pair);
+            const charPair = CharPair{
+                .first = tokens.items[i],
+                .second = tokens.items[i + 1],
+            };
+            try pairs.append(charPair);
         }
 
         return pairs;
     }
 
-    fn countCodePointPairs(_: *BasicTokenizer, pairs: *std.ArrayList(u32), stats: *TimeStats, allocator: std.mem.Allocator) !std.AutoHashMap(u32, usize) {
+    fn countCodePointPairs(_: *BasicTokenizer, pairs: *std.ArrayList(CharPair), stats: *TimeStats, allocator: std.mem.Allocator) !std.AutoHashMap(CharPair, usize) {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -207,7 +197,7 @@ pub const BasicTokenizer = struct {
             stats.just_count_pairs_calls += 1;
         }
 
-        var pairCountsNew = std.AutoHashMap(u32, usize).init(allocator);
+        var pairCountsNew = std.AutoHashMap(CharPair, usize).init(allocator);
         errdefer pairCountsNew.deinit();
 
         for (pairs.items) |pair| {
@@ -222,7 +212,7 @@ pub const BasicTokenizer = struct {
         return pairCountsNew;
     }
 
-    fn sortCodePointPairs(_: *BasicTokenizer, pairCounts: std.AutoHashMap(u32, usize), stats: *TimeStats, allocator: std.mem.Allocator) ![]PairCount {
+    fn sortCodePointPairs(_: *BasicTokenizer, pairCounts: std.AutoHashMap(CharPair, usize), stats: *TimeStats, allocator: std.mem.Allocator) ![]PairCount {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -250,14 +240,14 @@ pub const BasicTokenizer = struct {
         return sortedPairs;
     }
 
-    fn printMergeInfo(_: *BasicTokenizer, currentIndex: u16, vocabSize: u16, topCodePointPair: PairCount) void {
+    fn printMergeInfo(_: *BasicTokenizer, currentIndex: u16, vocabSize: u16, topPairCount: PairCount) void {
         std.debug.print("merge {d}/{d}: ({d},{d}) -> {d} had {d} occurrences\n", .{
             currentIndex - vocabStart + 1,
             vocabSize - vocabStart,
-            @as(u16, @truncate(topCodePointPair.pair >> 16)),
-            @as(u16, @truncate(topCodePointPair.pair & 0xFFFF)),
+            topPairCount.pair.first,
+            topPairCount.pair.second,
             currentIndex,
-            topCodePointPair.count,
+            topPairCount.count,
         });
     }
 
