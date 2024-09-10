@@ -9,13 +9,18 @@ pub const TrainError = error{
     OutOfMemory,
 };
 
+const Merge = struct {
+    pair: CharPair,
+    new_token: u16,
+};
+
 const Merges = struct {
-    merges: std.AutoHashMap(CharPair, u16),
+    merges: std.ArrayList(Merge),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
-            .merges = std.AutoHashMap(CharPair, u16).init(allocator),
+            .merges = std.ArrayList(Merge).init(allocator),
             .allocator = allocator,
         };
     }
@@ -25,7 +30,7 @@ const Merges = struct {
     }
 
     pub fn put(self: *Merges, pair: PairCount, new_token: u16) !void {
-        try self.merges.put(pair.pair, new_token);
+        try self.merges.append(.{ .pair = pair.pair, .new_token = new_token });
     }
 };
 
@@ -37,22 +42,6 @@ const CharPair = struct {
 const PairCount = struct {
     pair: CharPair,
     count: usize,
-};
-
-const CharPairFrequencies = struct {
-    frequencies: std.AutoHashMap(u32, usize),
-    allocator: std.mem.Allocator,
-
-    pub fn init(allocator: std.mem.Allocator) @This() {
-        return .{
-            .frequencies = std.AutoHashMap(u32, usize).init(allocator),
-            .allocator = allocator,
-        };
-    }
-
-    pub fn deinit(self: *CharPairFrequencies) void {
-        self.frequencies.deinit();
-    }
 };
 
 const vocabStart: u16 = 256;
@@ -74,6 +63,15 @@ pub const BasicTokenizer = struct {
     pub fn deinit(self: *@This()) void {
         self.timeStats.deinit();
         self.merges.deinit();
+    }
+
+    pub fn encode(self: *@This(), text: []const u8) !std.ArrayList(u16) {
+        var tokens = try self.generateInitialTokens(text);
+        defer tokens.deinit();
+
+        for (tokens.items) |token| {
+            std.debug.print("{d} ", .{token});
+        }
     }
 
     pub fn train(self: *@This(), text: []const u8, vocabSize: u16, verbose: bool) TrainError!void {
@@ -257,10 +255,9 @@ pub const BasicTokenizer = struct {
 
         var writer = file.writer();
 
-        var it = self.merges.merges.iterator();
-        while (it.next()) |entry| {
-            const pair = entry.key_ptr.*;
-            const new_token = entry.value_ptr.*;
+        for (self.merges.merges.items) |entry| {
+            const pair = entry.pair;
+            const new_token = entry.new_token;
             try writer.print("{d},{d},{d}\n", .{ pair.first, pair.second, new_token });
         }
     }
