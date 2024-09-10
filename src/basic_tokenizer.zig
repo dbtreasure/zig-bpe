@@ -68,21 +68,21 @@ const vocabStart: u16 = 256;
 
 pub const BasicTokenizer = struct {
     allocator: std.mem.Allocator,
-    tokens: std.ArrayList(u16),
     timeStats: *TimeStats,
+    merges: Merges,
 
     pub fn init(allocator: std.mem.Allocator) !@This() {
         const timeStats = try TimeStats.init(allocator);
         return .{
             .allocator = allocator,
-            .tokens = std.ArrayList(u16).init(allocator),
             .timeStats = timeStats,
+            .merges = Merges.init(allocator),
         };
     }
 
     pub fn deinit(self: *@This()) void {
-        self.tokens.deinit();
         self.timeStats.deinit();
+        self.merges.deinit();
     }
 
     pub fn train(self: *@This(), text: []const u8, vocabSize: u16, verbose: bool) TrainError!void {
@@ -123,19 +123,16 @@ pub const BasicTokenizer = struct {
         try currentTokens.appendSlice(tokens.items);
         defer currentTokens.deinit();
 
-        var merges = Merges.init(self.allocator);
-        defer merges.deinit();
-
         var currentIndex: u16 = vocabStart;
+
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const aa = arena.allocator();
+
         while (currentIndex < vocabSize) : (currentIndex += 1) {
-            var codePointPairs = try self.generateCodePointPairs(&currentTokens, self.timeStats);
-            defer codePointPairs.deinit();
-
-            var codePointPairCounts = try self.countCodePointPairs(&codePointPairs, self.timeStats);
-            defer codePointPairCounts.deinit();
-
-            const sortedCodePointPairs = try self.sortCodePointPairs(codePointPairCounts, self.timeStats);
-            defer self.allocator.free(sortedCodePointPairs);
+            var codePointPairs = try self.generateCodePointPairs(&currentTokens, self.timeStats, aa);
+            const codePointPairCounts = try self.countCodePointPairs(&codePointPairs, self.timeStats, aa);
+            const sortedCodePointPairs = try self.sortCodePointPairs(codePointPairCounts, self.timeStats, aa);
 
             const topCodePointPair = sortedCodePointPairs[0];
 
@@ -143,12 +140,12 @@ pub const BasicTokenizer = struct {
                 self.printMergeInfo(currentIndex, vocabSize, topCodePointPair);
             }
 
-            try merges.put(topCodePointPair, currentIndex);
+            try self.merges.put(topCodePointPair, currentIndex);
 
             try replaceTopPairWithNewToken(&currentTokens, topCodePointPair, currentIndex, self.timeStats);
-        }
 
-        try self.tokens.appendSlice(currentTokens.items);
+            _ = arena.reset(.free_all);
+        }
     }
 
     fn replaceTopPairWithNewToken(tokens: *std.ArrayList(u16), pair: PairCount, newToken: u16, stats: *TimeStats) TrainError!void {
@@ -182,7 +179,7 @@ pub const BasicTokenizer = struct {
         try tokens.resize(j);
     }
 
-    fn generateCodePointPairs(self: *BasicTokenizer, tokens: *std.ArrayList(u16), stats: *TimeStats) !std.ArrayList(u32) {
+    fn generateCodePointPairs(_: *BasicTokenizer, tokens: *std.ArrayList(u16), stats: *TimeStats, allocator: std.mem.Allocator) !std.ArrayList(u32) {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -190,7 +187,7 @@ pub const BasicTokenizer = struct {
             stats.generate_pairs_calls += 1;
         }
 
-        var pairs = std.ArrayList(u32).init(self.allocator);
+        var pairs = std.ArrayList(u32).init(allocator);
         errdefer pairs.deinit();
 
         var i: usize = 0;
@@ -202,7 +199,7 @@ pub const BasicTokenizer = struct {
         return pairs;
     }
 
-    fn countCodePointPairs(self: *BasicTokenizer, pairs: *std.ArrayList(u32), stats: *TimeStats) !std.AutoHashMap(u32, usize) {
+    fn countCodePointPairs(_: *BasicTokenizer, pairs: *std.ArrayList(u32), stats: *TimeStats, allocator: std.mem.Allocator) !std.AutoHashMap(u32, usize) {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -210,7 +207,7 @@ pub const BasicTokenizer = struct {
             stats.just_count_pairs_calls += 1;
         }
 
-        var pairCountsNew = std.AutoHashMap(u32, usize).init(self.allocator);
+        var pairCountsNew = std.AutoHashMap(u32, usize).init(allocator);
         errdefer pairCountsNew.deinit();
 
         for (pairs.items) |pair| {
@@ -225,7 +222,7 @@ pub const BasicTokenizer = struct {
         return pairCountsNew;
     }
 
-    fn sortCodePointPairs(self: *BasicTokenizer, pairCounts: std.AutoHashMap(u32, usize), stats: *TimeStats) ![]PairCount {
+    fn sortCodePointPairs(_: *BasicTokenizer, pairCounts: std.AutoHashMap(u32, usize), stats: *TimeStats, allocator: std.mem.Allocator) ![]PairCount {
         const start = std.time.milliTimestamp();
         defer {
             const end = std.time.milliTimestamp();
@@ -233,8 +230,7 @@ pub const BasicTokenizer = struct {
             stats.sort_pairs_calls += 1;
         }
 
-        var sortedPairs = try self.allocator.alloc(PairCount, pairCounts.count());
-        errdefer self.allocator.free(sortedPairs);
+        var sortedPairs = try allocator.alloc(PairCount, pairCounts.count());
 
         var i: usize = 0;
         var it = pairCounts.iterator();
@@ -263,5 +259,37 @@ pub const BasicTokenizer = struct {
             currentIndex,
             topCodePointPair.count,
         });
+    }
+
+    pub fn serializeMerges(self: *@This(), file_path: []const u8) !void {
+        const file = try std.fs.cwd().createFile(file_path, .{});
+        defer file.close();
+
+        var writer = file.writer();
+
+        var it = self.merges.merges.iterator();
+        while (it.next()) |entry| {
+            const pair = entry.key_ptr.*;
+            const new_token = entry.value_ptr.*;
+            try writer.print("{d},{d},{d}\n", .{ pair.first, pair.second, new_token });
+        }
+    }
+
+    pub fn deserializeMerges(self: *@This(), file_path: []const u8) !void {
+        const file = try std.fs.cwd().openFile(file_path, .{});
+        defer file.close();
+
+        var buf_reader = std.io.bufferedReader(file.reader());
+        var in_stream = buf_reader.reader();
+
+        var buf: [100]u8 = undefined;
+        while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
+            var it = std.mem.split(u8, line, ",");
+            const first = try std.fmt.parseInt(u16, it.next() orelse return error.InvalidFormat, 10);
+            const second = try std.fmt.parseInt(u16, it.next() orelse return error.InvalidFormat, 10);
+            const new_token = try std.fmt.parseInt(u16, it.next() orelse return error.InvalidFormat, 10);
+
+            try self.merges.merges.put(.{ .first = first, .second = second }, new_token);
+        }
     }
 };
