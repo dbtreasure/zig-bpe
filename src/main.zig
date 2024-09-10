@@ -19,6 +19,14 @@ pub fn main() !void {
     try tokenizer.train(text, 300, false);
     try tokenizer.serializeMerges("merges.txt");
 
+    // try tokenizer.deserializeMerges("merges.txt");
+    const tokens = try tokenizer.encode("I'm so excited to see you!");
+    defer tokens.deinit();
+
+    for (tokens.items) |token| {
+        std.debug.print("{d} ", .{token});
+    }
+
     const end_time = std.time.milliTimestamp();
     const duration_ms = end_time - start_time;
 

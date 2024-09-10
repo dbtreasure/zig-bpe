@@ -29,8 +29,11 @@ const Merges = struct {
         self.merges.deinit();
     }
 
-    pub fn put(self: *Merges, pair: PairCount, new_token: u16) !void {
-        try self.merges.append(.{ .pair = pair.pair, .new_token = new_token });
+    pub fn put(self: *Merges, pair: CharPair, new_token: u16) !void {
+        try self.merges.append(.{
+            .pair = pair,
+            .new_token = new_token,
+        });
     }
 };
 
@@ -67,11 +70,20 @@ pub const BasicTokenizer = struct {
 
     pub fn encode(self: *@This(), text: []const u8) !std.ArrayList(u16) {
         var tokens = try self.generateInitialTokens(text);
-        defer tokens.deinit();
 
-        for (tokens.items) |token| {
-            std.debug.print("{d} ", .{token});
+        const tokenPairs = try self.generateCodePointPairs(&tokens, self.timeStats, self.allocator);
+        defer tokenPairs.deinit();
+
+        // iterate through self.merges.merges.items and replace the tokens with the new tokens
+        for (self.merges.merges.items) |merge| {
+            for (tokenPairs.items) |*tokenPair| {
+                if (tokenPair.first == merge.pair.first and tokenPair.second == merge.pair.second) {
+                    tokenPair.first = merge.new_token;
+                }
+            }
         }
+
+        return tokens;
     }
 
     pub fn train(self: *@This(), text: []const u8, vocabSize: u16, verbose: bool) TrainError!void {
@@ -129,7 +141,7 @@ pub const BasicTokenizer = struct {
                 self.printMergeInfo(currentIndex, vocabSize, topCodePointPair);
             }
 
-            try self.merges.put(topCodePointPair, currentIndex);
+            try self.merges.put(topCodePointPair.pair, currentIndex);
 
             try replaceTopPairWithNewToken(&currentTokens, topCodePointPair, currentIndex, self.timeStats);
 
@@ -276,7 +288,7 @@ pub const BasicTokenizer = struct {
             const second = try std.fmt.parseInt(u16, it.next() orelse return error.InvalidFormat, 10);
             const new_token = try std.fmt.parseInt(u16, it.next() orelse return error.InvalidFormat, 10);
 
-            try self.merges.merges.put(.{ .first = first, .second = second }, new_token);
+            try self.merges.put(.{ .first = first, .second = second }, new_token);
         }
     }
 };
