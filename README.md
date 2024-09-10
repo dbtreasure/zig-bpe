@@ -9,6 +9,8 @@ This project implements a basic tokenizer in Zig, focusing on text processing an
 - Expand vocabulary using a simplified BPE-like approach
 - Train the tokenizer on input text
 - Measure and report performance statistics
+- Encode and decode text using the trained tokenizer
+- Serialize and deserialize merge operations
 
 ## File Structure
 
@@ -34,19 +36,15 @@ The current implementation works with UTF-8 encoded text but may not handle all 
 The `basic_tokenizer.zig` file provides the core implementation of the tokenizer. Key features include:
 
 1. **Modular Structure**: The code is organized into a `BasicTokenizer` struct, encapsulating all tokenization-related functionality.
-
 2. **Memory Management**: Uses Zig's allocator interface for efficient memory management.
-
 3. **UTF-8 Handling**: The implementation handles UTF-8 encoded text, supporting a wide range of input data.
-
 4. **Vocabulary Management**: Includes methods for creating and managing the tokenizer's vocabulary.
-
 5. **Flexible Token Type**: Uses appropriate types for tokens, allowing for customizable vocabulary sizes.
-
 6. **Error Handling**: Implements error handling throughout the tokenization process.
-
 7. **Training Functionality**: Includes a `train` method to learn from input text.
+8. **Encoding and Decoding**: Provides methods to encode text into tokens and decode tokens back into text.
+9. **Clear API**: Offers a clear and easy-to-use API for tokenization, training, and serialization.
 
-8. **Clear API**: Offers a clear and easy-to-use API for tokenization and training.
+## Serialization and Deserialization
 
-This implementation provides a foundation for text tokenization, suitable for various applications and input data types.
+The tokenizer supports serializing and deserializing merge operations, allowing you to save and load the trained model.
