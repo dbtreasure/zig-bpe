@@ -1,8 +1,9 @@
-const rl = @import("raylib");
 const std = @import("std");
+
 const readFile = @import("utils/read_file.zig").readFile;
 const BasicTokenizer = @import("basic_tokenizer.zig").BasicTokenizer;
 const TrainError = @import("basic_tokenizer.zig").TrainError;
+const TokenizerGui = @import("tokenizer_gui.zig").TokenizerGui;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -37,4 +38,6 @@ pub fn main() !void {
     const duration_ms = end_time - start_time;
 
     std.debug.print("Training completed in {d} ms\n", .{duration_ms});
+
+    try TokenizerGui.init();
 }
