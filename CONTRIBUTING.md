@@ -1,10 +1,10 @@
-# Contributing to ⚡️bpe-zig
+# Contributing to ⚡️zig-bpe
 
-Thank you for your interest in contributing to ⚡️ bpe-zig! We welcome contributions from the community and appreciate your help in making our project better.
+Thank you for your interest in contributing to ⚡️ zig-bpe! We welcome contributions from the community and appreciate your help in making our project better.
 
 ## Table of Contents
 
-- [Contributing to ⚡️bpe-zig](#contributing-to-️bpe-zig)
+- [Contributing to ⚡️zig-bpe](#contributing-to-️zig-bpe)
   - [Table of Contents](#table-of-contents)
   - [Code of Conduct](#code-of-conduct)
   - [Getting Started](#getting-started)
