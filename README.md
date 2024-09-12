@@ -1,6 +1,18 @@
-# Zig Tokenizer
+# bpe-zig
 
 This project implements a basic tokenizer in Zig, focusing on text processing and Byte Pair Encoding (BPE) concepts.
+
+## What is Byte Pair Encoding
+
+Byte Pair Encoding (BPE) is a data compression algorithm originally described by Philip Gage in 1994 [1]. It's also known as digram coding [2]. BPE works by iteratively replacing the most frequent pair of bytes in a sequence with a single, unused byte. This process continues until no byte pair occurs more than once.
+
+In recent years, BPE has gained popularity in natural language processing, particularly for tokenization in large language models. The modified version used in NLP starts with a vocabulary of individual characters and iteratively merges the most frequent adjacent pairs to form new tokens. This allows the algorithm to effectively handle both single characters and entire words, making it particularly useful for processing text data [3].
+
+BPE is notable for its simplicity and effectiveness in compressing data. It's especially useful in scenarios where the input data contains repeated sequences of bytes. The algorithm's ability to adapt to the specific patterns in the input data makes it a versatile choice for various compression tasks.
+
+[1]: https://en.wikipedia.org/wiki/Byte_pair_encoding#cite_note-1
+[2]: https://en.wikipedia.org/wiki/Byte_pair_encoding#cite_note-3
+[3]: https://en.wikipedia.org/wiki/Byte_pair_encoding#cite_note-5
 
 ## Zig Version
 
