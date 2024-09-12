@@ -70,13 +70,16 @@ pub const BasicTokenizer = struct {
 
     pub fn encode(self: *@This(), text: []const u8) !std.ArrayList(u16) {
         var tokens = try self.generateInitialTokens(text);
+        errdefer tokens.deinit();
 
         for (self.merges.merges.items) |merge| {
             var i: usize = 0;
-            while (i < tokens.items.len) : (i += 1) {
-                if (tokens.items[i] == merge.pair.first and tokens.items[i + 1] == merge.pair.second) {
+            while (i < tokens.items.len) {
+                if (i + 1 < tokens.items.len and tokens.items[i] == merge.pair.first and tokens.items[i + 1] == merge.pair.second) {
                     tokens.items[i] = merge.new_token;
                     _ = tokens.orderedRemove(i + 1);
+                } else {
+                    i += 1;
                 }
             }
         }
@@ -181,6 +184,11 @@ pub const BasicTokenizer = struct {
             var codePointPairs = try self.generateCodePointPairs(&currentTokens, self.timeStats, aa);
             const codePointPairCounts = try self.countCodePointPairs(&codePointPairs, self.timeStats, aa);
             const sortedCodePointPairs = try self.sortCodePointPairs(codePointPairCounts, self.timeStats, aa);
+
+            if (sortedCodePointPairs.len == 0) {
+                std.debug.print("No more pairs to merge. Stopping early.\n", .{});
+                break;
+            }
 
             const topCodePointPair = sortedCodePointPairs[0];
 
@@ -339,3 +347,86 @@ pub const BasicTokenizer = struct {
         }
     }
 };
+
+test "generateInitialTokens" {
+    var tokenizer = try BasicTokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+
+    const text = "hello world";
+
+    const tokens = try tokenizer.generateInitialTokens(text);
+    defer tokens.deinit();
+    try std.testing.expectEqualSlices(u16, &.{ 'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd' }, tokens.items);
+}
+
+test "encode" {
+    var tokenizer = try BasicTokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+
+    // Add some merges to the tokenizer
+    try tokenizer.merges.put(.{ .first = 'h', .second = 'e' }, 256);
+    try tokenizer.merges.put(.{ .first = 256, .second = 'l' }, 257);
+    try tokenizer.merges.put(.{ .first = 'w', .second = 'o' }, 258);
+
+    const text = "hello world";
+    const encoded = try tokenizer.encode(text);
+    defer encoded.deinit();
+
+    // Expected tokens: [257, 'l', 'o', ' ', 258, 'r', 'l', 'd']
+    const expected = [_]u16{ 257, 'l', 'o', ' ', 258, 'r', 'l', 'd' };
+    try std.testing.expectEqualSlices(u16, &expected, encoded.items);
+}
+
+test "decode" {
+    var tokenizer = try BasicTokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+
+    // Add some merges to the tokenizer
+    try tokenizer.merges.put(.{ .first = 'h', .second = 'e' }, 256);
+    try tokenizer.merges.put(.{ .first = 256, .second = 'l' }, 257);
+    try tokenizer.merges.put(.{ .first = 'w', .second = 'o' }, 258);
+
+    var tokens = std.ArrayList(u16).init(std.testing.allocator);
+    defer tokens.deinit();
+    try tokens.appendSlice(&[_]u16{ 257, 'l', 'o', ' ', 258, 'r', 'l', 'd' });
+
+    const decoded = try tokenizer.decode(tokens);
+    defer std.testing.allocator.free(decoded);
+
+    try std.testing.expectEqualStrings("hello world", decoded);
+}
+
+test "train" {
+    var tokenizer = try BasicTokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+
+    const text = "hello world hello";
+    const vocabSize: u16 = 300;
+
+    try tokenizer.train(text, vocabSize, true);
+
+    // Check if merges were created
+    try std.testing.expect(tokenizer.merges.merges.items.len > 0);
+
+    // Encode a test string and check the result
+    const encoded = try tokenizer.encode("hello");
+    defer encoded.deinit();
+
+    // Print the encoded result for debugging
+    std.debug.print("Encoded result: ", .{});
+    for (encoded.items) |token| {
+        std.debug.print("{} ", .{token});
+    }
+    std.debug.print("\n", .{});
+
+    // Check the length of the encoded result
+    try std.testing.expect(encoded.items.len == 1);
+
+    // Check the specific token
+    try std.testing.expect(encoded.items[0] == 259);
+
+    // Decode the encoded string and check the result
+    const decoded = try tokenizer.decode(encoded);
+    defer std.testing.allocator.free(decoded);
+    try std.testing.expectEqualStrings("hello", decoded);
+}
