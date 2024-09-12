@@ -2,6 +2,10 @@
 
 This project implements a basic tokenizer in Zig, focusing on text processing and Byte Pair Encoding (BPE) concepts.
 
+## Zig Version
+
+This project is developed using Zig version 0.13.0. Make sure you have this version installed to build and run the project successfully.
+
 ## Features
 
 - Read input from a file
