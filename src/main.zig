@@ -39,5 +39,5 @@ pub fn main() !void {
 
     std.debug.print("Training completed in {d} ms\n", .{duration_ms});
 
-    try TokenizerGui.init();
+    // try TokenizerGui.init();
 }
