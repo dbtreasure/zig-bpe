@@ -1,4 +1,4 @@
-# bpe-zig
+# ⚡️ bpe-zig
 
 This project implements a basic tokenizer in Zig, focusing on text processing and Byte Pair Encoding (BPE) concepts.
 
