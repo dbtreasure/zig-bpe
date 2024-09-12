@@ -48,3 +48,37 @@ The `basic_tokenizer.zig` file provides the core implementation of the tokenizer
 ## Serialization and Deserialization
 
 The tokenizer supports serializing and deserializing merge operations, allowing you to save and load the trained model.
+
+## Testing
+
+The project includes several unit tests to ensure the correct functionality of the tokenizer. These tests cover various aspects of the `BasicTokenizer` implementation:
+
+1. **generateInitialTokens**: Tests the initial tokenization of a string into individual characters.
+2. **encode**: Verifies the encoding process, including the application of learned merges.
+3. **decode**: Checks the decoding process, ensuring encoded tokens are correctly converted back to text.
+4. **train**: Tests the training process, including merge operations and vocabulary expansion.
+5. **serializeMerges and deserializeMerges**: Ensures that merge operations can be correctly saved to and loaded from a file.
+
+### Running the Tests
+
+To run all the tests for the project, use the following command in the root directory of the project:
+
+```
+zig test src/basic_tokenizer.zig
+```
+
+This command will compile and run all the tests defined in the `basic_tokenizer.zig` file.
+
+To run tests for other specific files, replace
+
+```
+zig test src/basic_tokenizer.zig
+```
+
+This command will compile and run all the tests defined in the `basic_tokenizer.zig` file.
+
+### Test Output
+
+When you run the tests, Zig will compile the code and execute each test function. The output will show which tests passed or failed, along with any debug information printed during the tests.
+
+If all tests pass, you'll see a message indicating success. If any tests fail, Zig will provide detailed information about the failure, including the line number and the nature of the assertion that failed.
